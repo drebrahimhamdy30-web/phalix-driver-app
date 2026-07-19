@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
@@ -11,15 +12,19 @@ import 'home_screen.dart';
 final FlutterLocalNotificationsPlugin localNotifications =
     FlutterLocalNotificationsPlugin();
 
-// قناة عالية الأهمية بصوت مخصّص (تصوّت حتى والتطبيق مقفول)
-const AndroidNotificationChannel ordersChannel = AndroidNotificationChannel(
+final Int64List _vibration = Int64List.fromList([0, 800, 400, 800, 400, 800, 400, 800]);
+
+// قناة بمستوى المنبّه (صوت عالي + اهتزاز، تصوّت حتى والتطبيق مقفول)
+final AndroidNotificationChannel ordersChannel = AndroidNotificationChannel(
   Config.channelId,
   Config.channelName,
   description: Config.channelDesc,
   importance: Importance.max,
   playSound: true,
-  sound: RawResourceAndroidNotificationSound('alert'),
+  sound: const RawResourceAndroidNotificationSound('alert'),
+  audioAttributesUsage: AudioAttributesUsage.alarm,
   enableVibration: true,
+  vibrationPattern: _vibration,
 );
 
 // معالج الرسائل والتطبيق مقفول/في الخلفية (لازم top-level)
@@ -37,7 +42,7 @@ Future<void> _showNotification(RemoteMessage message) async {
     DateTime.now().millisecondsSinceEpoch ~/ 1000,
     title,
     body,
-    const NotificationDetails(
+    NotificationDetails(
       android: AndroidNotificationDetails(
         Config.channelId,
         Config.channelName,
@@ -45,7 +50,12 @@ Future<void> _showNotification(RemoteMessage message) async {
         importance: Importance.max,
         priority: Priority.max,
         playSound: true,
-        sound: RawResourceAndroidNotificationSound('alert'),
+        sound: const RawResourceAndroidNotificationSound('alert'),
+        audioAttributesUsage: AudioAttributesUsage.alarm,
+        enableVibration: true,
+        vibrationPattern: _vibration,
+        additionalFlags: Int32List.fromList(<int>[4]), // FLAG_INSISTENT: يكرر الصوت لحد ما يُفتح
+        category: AndroidNotificationCategory.alarm,
       ),
     ),
   );

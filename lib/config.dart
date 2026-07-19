@@ -9,8 +9,8 @@ class Config {
   static const String loginUrl =
       'https://agent.ebrahimhamdy.com/webhook/login';
 
-  // قناة الإشعارات + الصوت
-  static const String channelId = 'phalix_orders';
+  // قناة الإشعارات + الصوت (قناة جديدة بمستوى المنبّه)
+  static const String channelId = 'phalix_alarm';
   static const String channelName = 'طلبات التوصيل';
   static const String channelDesc = 'إشعارات الطلبات الجديدة للسائق';
 }

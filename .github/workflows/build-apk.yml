@@ -30,6 +30,8 @@ jobs:
           # نغمة الإشعار
           mkdir -p android/app/src/main/res/raw
           cp raw_assets/alert.mp3 android/app/src/main/res/raw/alert.mp3
+          echo "=== تأكيد وجود ملف الصوت ==="
+          ls -la android/app/src/main/res/raw/
           # إذن الإشعارات (أندرويد 13+)
           sed -i 's#<application#<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n    <application#' android/app/src/main/AndroidManifest.xml
           # اسم التطبيق الظاهر
