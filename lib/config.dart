@@ -12,6 +12,8 @@ class Config {
   // نقطة سحب الطلبات الجديدة (خدمة الخلفية تناديها بشكل دوري)
   static const String pollUrl =
       '$supabaseUrl/functions/v1/driver-poll';
+  static const String markUrl =
+      '$supabaseUrl/functions/v1/driver-mark';
   static const String appSecret =
       '87bcac4b4da9317f3b8716e6af9269533f8e2228cc0db43b';
   // كل كام ثانية تسحب الخدمة الطلبات الجديدة

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/widgets.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -88,6 +89,8 @@ class AlarmTaskHandler extends TaskHandler {
 
   @override
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
+    // تسجيل الـ plugins داخل عملية الخدمة (لازم عشان الإشعارات تشتغل هنا)
+    DartPluginRegistrant.ensureInitialized();
     await initNotifications();
     _driverId =
         (await FlutterForegroundTask.getData<String>(key: 'driver_id')) ?? '';
@@ -122,8 +125,18 @@ class AlarmTaskHandler extends TaskHandler {
       final o = fresh.first; // الأحدث (مرتّبة تنازليًا)
       final bill = o['bill_no'] ?? '';
       final region = o['cust_region'] ?? '';
-      await showAlarm('📦 طلب جديد وصلك!',
-          'طلب #$bill${region != '' ? ' - $region' : ''}');
+      // تشخيص: تأكيد وصول الكود لنقطة الإنذار
+      try {
+        await http
+            .post(Uri.parse(Config.markUrl),
+                headers: {'Content-Type': 'application/json'},
+                body: jsonEncode({'driver_id': _driverId, 'bill': '$bill'}))
+            .timeout(const Duration(seconds: 5));
+      } catch (_) {}
+      try {
+        await showAlarm('📦 طلب جديد وصلك!',
+            'طلب #$bill${region != '' ? ' - $region' : ''}');
+      } catch (_) {}
       _baseline = _maxAssigned(orders, _baseline);
       await FlutterForegroundTask.saveData(
           key: 'baseline', value: _baseline.toIso8601String());
