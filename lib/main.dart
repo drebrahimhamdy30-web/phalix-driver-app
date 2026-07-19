@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
-import 'package:flutter/widgets.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -90,7 +90,7 @@ class AlarmTaskHandler extends TaskHandler {
   @override
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
     // تسجيل الـ plugins داخل عملية الخدمة (لازم عشان الإشعارات تشتغل هنا)
-    DartPluginRegistrant.ensureInitialized();
+    ui.DartPluginRegistrant.ensureInitialized();
     await initNotifications();
     _driverId =
         (await FlutterForegroundTask.getData<String>(key: 'driver_id')) ?? '';
