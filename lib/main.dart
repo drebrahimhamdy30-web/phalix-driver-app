@@ -66,7 +66,6 @@ Future<void> showAlarm(String title, String body) async {
         autoCancel: false,
         category: AndroidNotificationCategory.alarm,
         fullScreenIntent: true, // يظهر كمكالمة حتى والشاشة مقفولة
-        visibility: NotificationVisibility.public,
       ),
     ),
   );
