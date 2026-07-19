@@ -39,12 +39,7 @@ jobs:
           sed -i 's#minSdkVersion flutter.minSdkVersion#minSdkVersion 23#' android/app/build.gradle || true
           # تفعيل core library desugaring (مطلوب لمكتبة الإشعارات)
           sed -i 's/compileOptions {/compileOptions {\n        isCoreLibraryDesugaringEnabled = true/' android/app/build.gradle.kts
-          cat >> android/app/build.gradle.kts <<'EOF'
-
-dependencies {
-    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")
-}
-EOF
+          printf '\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")\n}\n' >> android/app/build.gradle.kts
 
       - name: Get dependencies
         run: flutter pub get
