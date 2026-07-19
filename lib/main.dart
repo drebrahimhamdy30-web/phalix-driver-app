@@ -27,10 +27,23 @@ final AndroidNotificationChannel ordersChannel = AndroidNotificationChannel(
   vibrationPattern: _vibration,
 );
 
+// تهيئة نظام الإشعارات + القناة (في العملية الرئيسية وعملية الخلفية)
+Future<void> initNotifications() async {
+  const initSettings = InitializationSettings(
+    android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+  );
+  await localNotifications.initialize(initSettings);
+  await localNotifications
+      .resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>()
+      ?.createNotificationChannel(ordersChannel);
+}
+
 // معالج الرسائل والتطبيق مقفول/في الخلفية (لازم top-level)
 @pragma('vm:entry-point')
 Future<void> _bgHandler(RemoteMessage message) async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  await initNotifications();
   await _showNotification(message);
 }
 
@@ -66,14 +79,7 @@ Future<void> main() async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
 
   // إعداد الإشعارات المحلية + القناة
-  const initSettings = InitializationSettings(
-    android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-  );
-  await localNotifications.initialize(initSettings);
-  await localNotifications
-      .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>()
-      ?.createNotificationChannel(ordersChannel);
+  await initNotifications();
 
   // أذونات الإشعارات (أندرويد 13+)
   await FirebaseMessaging.instance.requestPermission(alert: true, badge: true, sound: true);
