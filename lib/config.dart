@@ -9,9 +9,22 @@ class Config {
   static const String loginUrl =
       'https://agent.ebrahimhamdy.com/webhook/login';
 
-  // قناة الإشعارات + الصوت (قناة جديدة بصوت إنذار مستمر عالي)
-  // ملاحظة: قنوات أندرويد ثابتة، فأي تغيير للصوت يتطلب معرّف قناة جديد
+  // نقطة سحب الطلبات الجديدة (خدمة الخلفية تناديها بشكل دوري)
+  static const String pollUrl =
+      '$supabaseUrl/functions/v1/driver-poll';
+  static const String appSecret =
+      '87bcac4b4da9317f3b8716e6af9269533f8e2228cc0db43b';
+  // كل كام ثانية تسحب الخدمة الطلبات الجديدة
+  static const int pollIntervalMs = 10000;
+
+  // قناة الإنذار (صوت إنذار مستمر عالي) — قنوات أندرويد ثابتة فأي تغيير للصوت يتطلب معرّف قناة جديد
   static const String channelId = 'phalix_alarm_v3';
   static const String channelName = 'طلبات التوصيل (إنذار)';
   static const String channelDesc = 'إشعارات الطلبات الجديدة للسائق بصوت إنذار مستمر';
+
+  // قناة الخدمة الدائمة (إشعار صامت ثابت يوضّح أن التطبيق يعمل)
+  static const String serviceChannelId = 'phalix_service';
+  static const String serviceChannelName = 'تشغيل التطبيق';
+  static const String serviceChannelDesc =
+      'يبقى التطبيق صاحيًا لاستقبال الطلبات فورًا';
 }

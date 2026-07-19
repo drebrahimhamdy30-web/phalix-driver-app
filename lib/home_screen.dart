@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'api.dart';
 import 'login_screen.dart';
+import 'main.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -29,10 +31,14 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _init() async {
+    // إيقاف صوت الإنذار بمجرد فتح التطبيق
+    await cancelAlarm();
     final prefs = await SharedPreferences.getInstance();
     _name = prefs.getString('driver_name') ?? 'سائق';
     _driverId = prefs.getString('driver_id') ?? '';
     _jwt = prefs.getString('jwt') ?? '';
+    // التأكد إن خدمة الخلفية شغّالة
+    if (_driverId.isNotEmpty) await startAlarmService(_driverId);
     // إعادة تسجيل التوكن للتأكيد
     try {
       final token = await FirebaseMessaging.instance.getToken();
@@ -51,6 +57,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _logout() async {
+    await stopAlarmService();
+    await FlutterForegroundTask.clearAllData();
+    await cancelAlarm();
     final prefs = await SharedPreferences.getInstance();
     await prefs.clear();
     if (!mounted) return;

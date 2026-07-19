@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'api.dart';
 import 'home_screen.dart';
+import 'main.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -57,6 +59,10 @@ class _LoginScreenState extends State<LoginScreen> {
         await prefs.setString('fcm_token', token);
       }
     } catch (_) {}
+
+    // بدء خدمة الخلفية الدائمة (سحب الطلبات + الإنذار المستمر)
+    await FlutterForegroundTask.clearAllData();
+    await startAlarmService(driver['id']);
 
     if (!mounted) return;
     Navigator.pushReplacement(

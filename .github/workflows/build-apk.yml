@@ -32,8 +32,11 @@ jobs:
           cp raw_assets/alert.mp3 android/app/src/main/res/raw/alert.mp3
           echo "=== تأكيد وجود ملف الصوت ==="
           ls -la android/app/src/main/res/raw/
-          # إذن الإشعارات (أندرويد 13+)
-          sed -i 's#<application#<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n    <application#' android/app/src/main/AndroidManifest.xml
+          # أذونات الإشعارات + الخدمة الدائمة
+          sed -i 's#<application#<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>\n    <uses-permission android:name="android.permission.WAKE_LOCK"/>\n    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>\n    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>\n    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>\n    <application#' android/app/src/main/AndroidManifest.xml
+          # تعريف خدمة الخلفية الدائمة
+          sed -i 's#</application>#    <service android:name="com.pravera.flutter_foreground_task.service.ForegroundService" android:foregroundServiceType="dataSync" android:exported="false" android:stopWithTask="false"/>\n    </application>#' android/app/src/main/AndroidManifest.xml
+          echo "=== المانيفست بعد التعديل ===" && cat android/app/src/main/AndroidManifest.xml
           # اسم التطبيق الظاهر
           sed -i 's#android:label="driver"#android:label="Phalix سائق"#' android/app/src/main/AndroidManifest.xml
           # رفع الحد الأدنى لإصدار أندرويد (مطلوب لـ Firebase)
