@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "481699262602",
+    "project_id": "phalix-delivery",
+    "storage_bucket": "phalix-delivery.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:481699262602:android:c71a923ff2352dac023d73",
+        "android_client_info": {
+          "package_name": "com.phalix.driver"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDCiRb9S2ySuZk9ymQm3_tX2v8SffmIyWk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

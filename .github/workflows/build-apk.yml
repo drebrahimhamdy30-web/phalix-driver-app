@@ -1,0 +1,52 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Scaffold Android project
+        run: |
+          flutter create --org com.phalix --project-name driver --platforms=android /tmp/scaffold
+          cp -r /tmp/scaffold/android ./android
+          # نغمة الإشعار
+          mkdir -p android/app/src/main/res/raw
+          cp raw_assets/alert.mp3 android/app/src/main/res/raw/alert.mp3
+          # إذن الإشعارات (أندرويد 13+)
+          sed -i 's#<application#<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n    <application#' android/app/src/main/AndroidManifest.xml
+          # اسم التطبيق الظاهر
+          sed -i 's#android:label="driver"#android:label="Phalix سائق"#' android/app/src/main/AndroidManifest.xml
+          # رفع الحد الأدنى لإصدار أندرويد (مطلوب لـ Firebase)
+          sed -i 's#minSdk = flutter.minSdkVersion#minSdk = 23#' android/app/build.gradle.kts || true
+          sed -i 's#minSdkVersion flutter.minSdkVersion#minSdkVersion 23#' android/app/build.gradle || true
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Build APK
+        run: flutter build apk --release
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: phalix-driver-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
+          if-no-files-found: error
