@@ -3,6 +3,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'api.dart';
+import 'config.dart';
 import 'login_screen.dart';
 import 'main.dart';
 
@@ -74,7 +75,7 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         backgroundColor: const Color(0xFF1a56db),
         foregroundColor: Colors.white,
-        title: Text('أهلاً $_name'),
+        title: Text('أهلاً $_name · ${Config.appVersion}'),
         actions: [
           IconButton(onPressed: _loadOrders, icon: const Icon(Icons.refresh)),
           IconButton(onPressed: _logout, icon: const Icon(Icons.logout)),

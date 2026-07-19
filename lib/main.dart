@@ -105,6 +105,19 @@ class AlarmTaskHandler extends TaskHandler {
       await FlutterForegroundTask.saveData(
           key: 'baseline', value: _baseline.toIso8601String());
     }
+    // تشخيص: تأكيد أن خدمة النسخة الجديدة اشتغلت فعلاً
+    try {
+      await http
+          .post(Uri.parse(Config.markUrl),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({
+                'event': 'start',
+                'v': Config.appVersion,
+                'driver_id': _driverId,
+                'baseline': _baseline.toIso8601String()
+              }))
+          .timeout(const Duration(seconds: 5));
+    } catch (_) {}
   }
 
   @override

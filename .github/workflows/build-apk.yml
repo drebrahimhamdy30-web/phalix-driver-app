@@ -45,6 +45,11 @@ jobs:
           # تفعيل core library desugaring (مطلوب لمكتبة الإشعارات)
           sed -i 's/compileOptions {/compileOptions {\n        isCoreLibraryDesugaringEnabled = true/' android/app/build.gradle.kts
           printf '\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")\n}\n' >> android/app/build.gradle.kts
+          # توقيع ثابت (عشان التحديثات تتثبّت فوق بعضها من غير حذف)
+          cp android_keys/phalix-release.jks android/app/phalix-release.jks
+          sed -i 's|    buildTypes {|    signingConfigs {\n        create("release") {\n            storeFile = file("phalix-release.jks")\n            storePassword = "phalix2026"\n            keyAlias = "phalix"\n            keyPassword = "phalix2026"\n        }\n    }\n\n    buildTypes {|' android/app/build.gradle.kts
+          sed -i 's|signingConfig = signingConfigs.getByName("debug")|signingConfig = signingConfigs.getByName("release")|' android/app/build.gradle.kts
+          echo "=== build.gradle.kts بعد التعديل ===" && cat android/app/build.gradle.kts
 
       - name: Get dependencies
         run: flutter pub get
