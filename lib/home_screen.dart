@@ -13,7 +13,7 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   String _name = 'سائق';
   String _driverId = '';
   String _jwt = '';
@@ -24,11 +24,34 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _init();
     // تحديث التوكن لو اتغيّر
     FirebaseMessaging.instance.onTokenRefresh.listen((t) async {
       if (_driverId.isNotEmpty) await Api.saveFcmToken(_driverId, t, _jwt);
     });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  // إيقاف الإنذار (صوت + اهتزاز) في الخدمة والواجهة
+  void _stopAlarms() {
+    FlutterForegroundTask.sendDataToTask('stop_alarm');
+    stopAlarmSound();
+    cancelAlarm();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // كل مرة يرجع التطبيق للواجهة → أوقف الإنذار
+    if (state == AppLifecycleState.resumed) {
+      _stopAlarms();
+      _loadOrders();
+    }
   }
 
   Future<void> _init() async {
