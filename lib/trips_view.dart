@@ -81,6 +81,7 @@ class TripsViewState extends State<TripsView> {
   Map<String, dynamic>? _locSettings;
   int _lateAssigned = 10;
   int _latePicked = 30;
+  bool _showStats = false;
   List<Map<String, dynamic>> _reviewFlags = [];
 
   Timer? _tick;
@@ -110,6 +111,7 @@ class TripsViewState extends State<TripsView> {
         await Api.getLocationSettings(widget.branchId, widget.jwt);
     _lateAssigned = board['lateAssigned'] is int ? board['lateAssigned'] : 10;
     _latePicked = board['latePicked'] is int ? board['latePicked'] : 30;
+    _showStats = board['showStats'] == true;
     final trips = (board['trips'] as List).cast<Map<String, dynamic>>();
     // تنبيهات الرحلة السابقة غير المقفولة على نظام الصيدلية (للرحلة الجارية)
     final activeTrip = trips
@@ -231,7 +233,7 @@ class TripsViewState extends State<TripsView> {
     final orders = _tripOrders['${trip['id']}'] ?? [];
     return Column(
       children: [
-        _statsBar(),
+        if (_showStats) _statsBar(),
         if (_reviewFlags.isNotEmpty) _reviewBanner(),
         _tabs(),
         if (_busy) const LinearProgressIndicator(minHeight: 2),
@@ -316,9 +318,7 @@ class TripsViewState extends State<TripsView> {
     num cash = 0;
     for (final o in delivered) {
       if (o['payment_method'] == 'cash') {
-        cash += (o['collected_amount'] is num
-            ? o['collected_amount']
-            : (o['total_bill_net'] is num ? o['total_bill_net'] : 0));
+        cash += _settleAmount(o);
       }
     }
     Widget cell(String label, String value, Color c) => Expanded(
@@ -349,6 +349,14 @@ class TripsViewState extends State<TripsView> {
         ],
       ),
     );
+  }
+
+  // المبلغ المعتمد للتسوية: لو الكاشير أقرّ مبلغ الطيار = المحصّل، وإلا = قيمة الفاتورة
+  num _settleAmount(Map<String, dynamic> o) {
+    if (o['collected_approved'] == true && o['collected_amount'] is num) {
+      return o['collected_amount'] as num;
+    }
+    return o['total_bill_net'] is num ? o['total_bill_net'] as num : 0;
   }
 
   int _dm(dynamic from, [dynamic to]) {
@@ -616,12 +624,35 @@ class TripsViewState extends State<TripsView> {
                   fontWeight: FontWeight.bold,
                   color: AppTheme.primary)),
           if (collected != null && (collected is num ? collected : 0) != 0)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text('✓ محصّل: ${_money(collected)} ج',
-                  style: const TextStyle(
-                      color: Color(0xFF16a34a), fontWeight: FontWeight.w600)),
-            ),
+            Builder(builder: (_) {
+              final c = collected is num ? collected : 0;
+              final bill =
+                  o['total_bill_net'] is num ? o['total_bill_net'] as num : 0;
+              final differs = bill > 0 && c != bill;
+              final approved = o['collected_approved'] == true;
+              return Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('✓ محصّل: ${_money(collected)} ج',
+                        style: const TextStyle(
+                            color: Color(0xFF16a34a),
+                            fontWeight: FontWeight.w600)),
+                    if (differs)
+                      Text(
+                          approved
+                              ? '✓ الكاشير أقرّ هذا المبلغ (يُحسب عليه)'
+                              : '⏳ مختلف عن الفاتورة — بانتظار إقرار الكاشير (يُحسب على الفاتورة حاليًا)',
+                          style: TextStyle(
+                              fontSize: 11,
+                              color: approved
+                                  ? const Color(0xFF16a34a)
+                                  : const Color(0xFF92400e))),
+                  ],
+                ),
+              );
+            }),
           if (urgent)
             _note('🚨 طلب عاجل', const Color(0xFFdc2626)),
           if (staffNotes != null && '$staffNotes'.isNotEmpty)
@@ -715,9 +746,7 @@ class TripsViewState extends State<TripsView> {
       if (['delivered', 'completed'].contains(st)) {
         done++;
         if (o['payment_method'] == 'cash') {
-          cash += (o['collected_amount'] is num
-              ? o['collected_amount']
-              : (o['total_bill_net'] is num ? o['total_bill_net'] : 0));
+          cash += _settleAmount(o);
         }
       }
     }
@@ -758,8 +787,11 @@ class TripsViewState extends State<TripsView> {
   Future<void> _openDeliver(Map<String, dynamic> o) async {
     final id = '${o['id']}';
     String pay = '${o['payment_method'] ?? 'cash'}';
-    final amtCtrl = TextEditingController(
-        text: '${o['collected_amount'] ?? o['total_bill_net'] ?? ''}');
+    final num billNum = (o['total_bill_net'] is num)
+        ? o['total_bill_net'] as num
+        : num.tryParse('${o['total_bill_net'] ?? 0}') ?? 0;
+    // الرقم الافتراضي = قيمة الفاتورة
+    final amtCtrl = TextEditingController(text: billNum == 0 ? '' : '$billNum');
     final noteCtrl = TextEditingController();
     final ok = await showDialog<bool>(
       context: context,
@@ -787,9 +819,43 @@ class TripsViewState extends State<TripsView> {
               TextField(
                 controller: amtCtrl,
                 keyboardType: TextInputType.number,
+                onChanged: (_) => setD(() {}),
                 decoration: const InputDecoration(
                     labelText: 'المبلغ المحصّل', border: OutlineInputBorder()),
               ),
+              const SizedBox(height: 6),
+              Builder(builder: (_) {
+                final typed = num.tryParse(amtCtrl.text.trim());
+                final changed = pay == 'cash' &&
+                    typed != null &&
+                    billNum > 0 &&
+                    typed != billNum;
+                return Align(
+                  alignment: Alignment.centerRight,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text('قيمة الفاتورة: ${_money(billNum)} ج.م',
+                          style: const TextStyle(
+                              fontSize: 12, color: Colors.grey)),
+                      if (changed)
+                        Container(
+                          margin: const EdgeInsets.only(top: 6),
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                              color: const Color(0xFFfef3c7),
+                              borderRadius: BorderRadius.circular(8),
+                              border:
+                                  Border.all(color: const Color(0xFFfcd34d))),
+                          child: const Text(
+                              '⚠️ غيّرت المبلغ عن الفاتورة — التسوية هتفضل على قيمة الفاتورة لحد ما الكاشير يقرّ الرقم ده',
+                              style: TextStyle(
+                                  fontSize: 12, color: Color(0xFF92400e))),
+                        ),
+                    ],
+                  ),
+                );
+              }),
               const SizedBox(height: 10),
               TextField(
                 controller: noteCtrl,
