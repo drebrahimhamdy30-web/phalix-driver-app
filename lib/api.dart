@@ -306,6 +306,38 @@ class Api {
     return {'ok': false, 'error': 'تعذّر الاتصال بالخادم'};
   }
 
+  // إعدادات فحص موقع الاستلام للفرع
+  static Future<Map<String, dynamic>?> getLocationSettings(
+      String branchId, String jwt) async {
+    if (branchId.isEmpty) return null;
+    final s = await _getList(
+        '$_rest/dispatch_settings?branch_id=eq.$branchId&select=location_check_enabled,pharmacy_lat,pharmacy_lng,pickup_radius_meters',
+        jwt);
+    if (s.isEmpty) return null;
+    return Map<String, dynamic>.from(s.first);
+  }
+
+  // تسجيل لوج للطلب (يُستخدم لتسجيل موقع الاستلام والمخالفات)
+  static Future<void> logOrder(String orderId, String event,
+      Map<String, dynamic> details, String driverId, String driverName,
+      String jwt) async {
+    try {
+      await http
+          .post(
+            Uri.parse('$_rest/order_logs'),
+            headers: {..._headers(jwt), 'Prefer': 'return=minimal'},
+            body: jsonEncode({
+              'order_id': orderId,
+              'event': event,
+              'details': details,
+              'user_id': driverId,
+              'user_name': driverName,
+            }),
+          )
+          .timeout(const Duration(seconds: 10));
+    } catch (_) {}
+  }
+
   static Future<bool> _patch(String url, Map<String, dynamic> body, String jwt) async {
     try {
       final res = await http

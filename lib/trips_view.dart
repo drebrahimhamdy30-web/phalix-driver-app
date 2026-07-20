@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'api.dart';
 import 'config.dart';
+import 'location.dart';
 
 const _stLabel = {
   'pending': 'جاهز',
@@ -56,11 +57,13 @@ class TripsView extends StatefulWidget {
   final String driverId;
   final String branchId;
   final String jwt;
+  final String driverName;
   const TripsView(
       {super.key,
       required this.driverId,
       required this.branchId,
-      required this.jwt});
+      required this.jwt,
+      this.driverName = 'سائق'});
 
   @override
   State<TripsView> createState() => TripsViewState();
@@ -74,6 +77,7 @@ class TripsViewState extends State<TripsView> {
   bool _canComplete = true;
   String? _selected;
   final Set<String> _expanded = {};
+  Map<String, dynamic>? _locSettings;
 
   @override
   void initState() {
@@ -86,6 +90,8 @@ class TripsViewState extends State<TripsView> {
     setState(() => _loading = true);
     final board =
         await Api.loadBoard(widget.driverId, widget.branchId, widget.jwt);
+    _locSettings ??=
+        await Api.getLocationSettings(widget.branchId, widget.jwt);
     if (!mounted) return;
     setState(() {
       _trips = (board['trips'] as List).cast<Map<String, dynamic>>();
@@ -107,6 +113,73 @@ class TripsViewState extends State<TripsView> {
     } catch (_) {}
     await load();
     if (mounted) setState(() => _busy = false);
+  }
+
+  // استلام طلب واحد مع فحص موقع الصيدلية
+  Future<void> _pickupOne(String id) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      final res = await checkPickupLocation(_locSettings);
+      if (!res.ok && mounted) await _showViolation(res);
+      await Api.pickupOrder(id, widget.jwt);
+      await Api.logOrder(id, 'order_picked', _buildPickupLog(res),
+          widget.driverId, widget.driverName, widget.jwt);
+    } catch (_) {}
+    await load();
+    if (mounted) setState(() => _busy = false);
+  }
+
+  // استلام كل الطلبات مع فحص واحد للموقع
+  Future<void> _pickupAll(List<String> ids) async {
+    if (_busy || ids.isEmpty) return;
+    setState(() => _busy = true);
+    try {
+      final res = await checkPickupLocation(_locSettings);
+      if (!res.ok && mounted) await _showViolation(res);
+      await Api.pickupAll(ids, widget.jwt);
+      final log = _buildPickupLog(res, bulk: true);
+      for (final id in ids) {
+        await Api.logOrder(id, 'order_picked', log, widget.driverId,
+            widget.driverName, widget.jwt);
+      }
+    } catch (_) {}
+    await load();
+    if (mounted) setState(() => _busy = false);
+  }
+
+  Map<String, dynamic> _buildPickupLog(LocResult res, {bool bulk = false}) {
+    final m = <String, dynamic>{};
+    if (bulk) m['bulk'] = true;
+    if (res.distance != null) m['distance_m'] = res.distance;
+    if (res.lat != null) {
+      m['pickup_lat'] = res.lat;
+      m['pickup_lng'] = res.lng;
+    }
+    if (res.acc != null) m['gps_accuracy_m'] = res.acc!.round();
+    if (!res.ok) {
+      m['pickup_violation'] = true;
+      if (res.noLoc) m['no_location'] = true;
+    }
+    return m;
+  }
+
+  Future<void> _showViolation(LocResult res) async {
+    final msg = res.noLoc
+        ? 'تعذّر تحديد موقعك.\n\nتم استلام الطلب وتسجيل ملاحظة للمراجعة.\n\nللحل: فعّل الـ GPS من الموبايل واسمح للتطبيق بالوصول للموقع.'
+        : 'استلام خارج حدود الفرع.\n\nأنت على بُعد ${res.distance} متر من الصيدلية.\nتم استلام الطلب وتحويله للمراجعة من الإدارة.';
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('⚠️ تنبيه موقع الاستلام'),
+        content: Text(msg, style: const TextStyle(height: 1.5)),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('حسناً')),
+        ],
+      ),
+    );
   }
 
   @override
@@ -201,8 +274,8 @@ class TripsViewState extends State<TripsView> {
           if (assigned.isNotEmpty)
             _bigBtn('▶️ استلمت الكل (${assigned.length})',
                 const Color(0xFF0891b2),
-                () => _run(() => Api.pickupAll(
-                    assigned.map((o) => '${o['id']}').toList(), widget.jwt))),
+                () => _pickupAll(
+                    assigned.map((o) => '${o['id']}').toList())),
           if (pending)
             _bigBtn('⏳ بانتظار موافقة الإدارة — إلغاء الطلب',
                 const Color(0xFFa16207),
@@ -349,7 +422,7 @@ class TripsViewState extends State<TripsView> {
     final btns = <Widget>[];
     if (status == 'assigned') {
       btns.add(_smallBtn('▶️ استلمت', const Color(0xFF0891b2),
-          () => _run(() => Api.pickupOrder(id, widget.jwt))));
+          () => _pickupOne(id)));
       btns.add(_smallBtn('⚠️ تعذر', const Color(0xFFdc2626),
           () => _openFail(o)));
     } else if (status == 'picked') {

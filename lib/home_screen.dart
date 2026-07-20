@@ -285,6 +285,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         driverId: _driverId,
                         branchId: _branchId,
                         jwt: _jwt,
+                        driverName: _name,
                       ),
                       HoursView(
                         driverId: _driverId,
