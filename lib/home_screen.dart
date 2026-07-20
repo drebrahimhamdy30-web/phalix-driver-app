@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'api.dart';
 import 'config.dart';
 import 'login_screen.dart';
+import 'trips_view.dart';
 import 'main.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -15,10 +15,10 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   String _name = 'سائق';
   String _driverId = '';
+  String _branchId = '';
   String _jwt = '';
-  bool _loading = true;
-  bool _fcmOk = false;
-  List<Map<String, dynamic>> _orders = [];
+  bool _ready = false;
+  final GlobalKey<TripsViewState> _tripsKey = GlobalKey<TripsViewState>();
 
   @override
   void initState() {
@@ -33,7 +33,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     super.dispose();
   }
 
-  // إيقاف الإنذار (صوت + اهتزاز) في الخدمة والواجهة
   void _stopAlarms() {
     FlutterForegroundTask.sendDataToTask('stop_alarm');
     stopAlarmSound();
@@ -42,10 +41,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // كل مرة يرجع التطبيق للواجهة → أوقف الإنذار
     if (state == AppLifecycleState.resumed) {
       _stopAlarms();
-      _loadOrders();
+      _tripsKey.currentState?.load();
     }
   }
 
@@ -53,28 +51,17 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final prefs = await SharedPreferences.getInstance();
     _name = prefs.getString('driver_name') ?? 'سائق';
     _driverId = prefs.getString('driver_id') ?? '';
+    _branchId = prefs.getString('branch_id') ?? '';
     _jwt = prefs.getString('jwt') ?? '';
-    // جاهز فورًا — التنبيهات تعمل عبر الخدمة الدائمة (سحب مباشر)
-    _fcmOk = true;
-    if (mounted) setState(() {});
-    // إيقاف أي إنذار شغّال
+    if (mounted) setState(() => _ready = true);
     try {
       FlutterForegroundTask.sendDataToTask('stop_alarm');
       await stopAlarmSound();
       await cancelAlarm();
     } catch (_) {}
-    // التأكد إن خدمة الخلفية شغّالة (بدون تعليق الواجهة)
     try {
       if (_driverId.isNotEmpty) await startAlarmService(_driverId);
     } catch (_) {}
-    await _loadOrders();
-  }
-
-  Future<void> _loadOrders() async {
-    setState(() => _loading = true);
-    final orders = await Api.getOrders(_driverId, _jwt);
-    if (!mounted) return;
-    setState(() { _orders = orders; _loading = false; });
   }
 
   Future<void> _logout() async {
@@ -95,100 +82,40 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       appBar: AppBar(
         backgroundColor: const Color(0xFF1a56db),
         foregroundColor: Colors.white,
-        title: Text('أهلاً $_name · ${Config.appVersion}'),
+        title: Text('أهلاً $_name · ${Config.appVersion}',
+            style: const TextStyle(fontSize: 15)),
         actions: [
-          IconButton(onPressed: _loadOrders, icon: const Icon(Icons.refresh)),
+          IconButton(
+              onPressed: () => _tripsKey.currentState?.load(),
+              icon: const Icon(Icons.refresh)),
           IconButton(onPressed: _logout, icon: const Icon(Icons.logout)),
         ],
       ),
-      body: Column(
-        children: [
-          Container(
-            width: double.infinity,
-            color: _fcmOk ? const Color(0xFFdcfce7) : const Color(0xFFfef9c3),
-            padding: const EdgeInsets.all(10),
-            child: Text(
-              _fcmOk
-                  ? '✅ الإشعارات مفعّلة — هتوصلك الطلبات بصوت'
-                  : '⏳ جاري تفعيل الإشعارات...',
-              textAlign: TextAlign.center,
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-          ),
-          Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator())
-                : _orders.isEmpty
-                    ? const Center(
-                        child: Text('لا توجد طلبات حالياً',
-                            style: TextStyle(color: Colors.grey)))
-                    : RefreshIndicator(
-                        onRefresh: _loadOrders,
-                        child: ListView.builder(
-                          padding: const EdgeInsets.all(12),
-                          itemCount: _orders.length,
-                          itemBuilder: (_, i) => _orderCard(_orders[i]),
-                        ),
-                      ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _orderCard(Map<String, dynamic> o) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 10),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      body: !_ready
+          ? const Center(child: CircularProgressIndicator())
+          : Column(
               children: [
-                Text('طلب #${o['bill_no'] ?? '-'}',
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                Text('${o['total_bill_net'] ?? 0} ج',
-                    style: const TextStyle(color: Color(0xFF16a34a), fontWeight: FontWeight.bold)),
+                Container(
+                  width: double.infinity,
+                  color: const Color(0xFFdcfce7),
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: const Text(
+                    '✅ جاهز — التنبيهات تعمل بصوت',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                        fontWeight: FontWeight.w600, fontSize: 12.5),
+                  ),
+                ),
+                Expanded(
+                  child: TripsView(
+                    key: _tripsKey,
+                    driverId: _driverId,
+                    branchId: _branchId,
+                    jwt: _jwt,
+                  ),
+                ),
               ],
             ),
-            const Divider(),
-            Text('${o['customer_name'] ?? ''}',
-                style: const TextStyle(fontWeight: FontWeight.w600)),
-            const SizedBox(height: 4),
-            Text('${o['customer_address'] ?? ''}  •  ${o['cust_region'] ?? ''}',
-                style: const TextStyle(color: Colors.grey, fontSize: 13)),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Icon(Icons.circle, size: 10, color: _statusColor(o['status'])),
-                const SizedBox(width: 6),
-                Text(_statusLabel(o['status']),
-                    style: TextStyle(color: _statusColor(o['status']), fontWeight: FontWeight.w600)),
-              ],
-            ),
-          ],
-        ),
-      ),
     );
-  }
-
-  Color _statusColor(String? s) {
-    switch (s) {
-      case 'assigned': return const Color(0xFFca8a04);
-      case 'picked': return const Color(0xFF0891b2);
-      case 'failed': return const Color(0xFFdc2626);
-      default: return Colors.grey;
-    }
-  }
-
-  String _statusLabel(String? s) {
-    switch (s) {
-      case 'assigned': return 'بانتظار الاستلام';
-      case 'picked': return 'في الطريق';
-      case 'failed': return 'فشل التسليم';
-      default: return s ?? '';
-    }
   }
 }

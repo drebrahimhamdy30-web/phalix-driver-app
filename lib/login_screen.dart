@@ -49,6 +49,7 @@ class _LoginScreenState extends State<LoginScreen> {
     await prefs.setString('driver_name', driver['full_name'] ?? res['user'] ?? 'سائق');
     await prefs.setString('jwt', jwt);
     await prefs.setString('branch', res['branch'] ?? '');
+    await prefs.setString('branch_id', '${driver['branch_id'] ?? ''}');
 
     // بدء خدمة الخلفية الدائمة (سحب الطلبات + الإنذار المستمر)
     await FlutterForegroundTask.clearAllData();

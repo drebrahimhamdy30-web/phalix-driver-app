@@ -32,7 +32,7 @@ class Api {
   // جلب بيانات السائق (uuid + الاسم) من رقم مستخدمه
   static Future<Map<String, dynamic>?> getDriver(int userId, String jwt) async {
     final url =
-        '${Config.supabaseUrl}/rest/v1/drivers?branch_user_id=eq.$userId&select=id,full_name,is_online&limit=1';
+        '${Config.supabaseUrl}/rest/v1/drivers?branch_user_id=eq.$userId&select=id,full_name,is_online,branch_id&limit=1';
     final res = await http.get(Uri.parse(url), headers: _headers(jwt));
     if (res.statusCode == 200) {
       final list = jsonDecode(res.body) as List;
@@ -80,5 +80,174 @@ class Api {
       }
     } catch (_) {}
     return [];
+  }
+
+  static String get _rest => '${Config.supabaseUrl}/rest/v1';
+
+  static Future<List<Map<String, dynamic>>> _getList(
+      String url, String jwt) async {
+    try {
+      final res = await http
+          .get(Uri.parse(url), headers: _headers(jwt))
+          .timeout(const Duration(seconds: 10));
+      if (res.statusCode == 200) {
+        final list = jsonDecode(res.body) as List;
+        return list.map((e) => Map<String, dynamic>.from(e)).toList();
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  // تحميل لوحة الطيار: الرحلة الجارية + آخر 3 رحلات + طلباتها
+  static Future<Map<String, dynamic>> loadBoard(
+      String driverId, String? branchId, String jwt) async {
+    final trips = await _getList(
+        '$_rest/trips?driver_id=eq.$driverId&status=in.(active,pending_complete,completed)&order=created_at.desc&limit=10&select=*',
+        jwt);
+    final active = trips
+        .where((t) => ['active', 'pending_complete'].contains(t['status']))
+        .toList();
+    final completed =
+        trips.where((t) => t['status'] == 'completed').take(3).toList();
+    final board = <Map<String, dynamic>>[];
+    if (active.isNotEmpty) board.add(active.first);
+    board.addAll(completed);
+
+    final tripOrders = <String, List<Map<String, dynamic>>>{};
+    for (final trip in board) {
+      final tid = '${trip['id']}';
+      final to = await _getList(
+          '$_rest/trip_orders?trip_id=eq.$tid&select=order_id', jwt);
+      final ids = to.map((x) => '${x['order_id']}').toList();
+      if (ids.isNotEmpty) {
+        tripOrders[tid] = await _getList(
+            '$_rest/orders?id=in.(${ids.join(',')})&select=*', jwt);
+      } else {
+        tripOrders[tid] = [];
+      }
+    }
+
+    // طلبات مباشرة (بدون رحلة) لو مفيش رحلة جارية
+    if (active.isEmpty) {
+      final direct = await _getList(
+          '$_rest/orders?driver_id=eq.$driverId&status=in.(assigned,picked)&select=*',
+          jwt);
+      if (direct.isNotEmpty) {
+        board.insert(0, {
+          'id': 'direct',
+          'status': 'active',
+          'created_at': DateTime.now().toUtc().toIso8601String(),
+        });
+        tripOrders['direct'] = direct;
+      }
+    }
+
+    bool canComplete = true;
+    if (branchId != null && branchId.isNotEmpty) {
+      final s = await _getList(
+          '$_rest/dispatch_settings?branch_id=eq.$branchId&select=driver_can_complete_trip',
+          jwt);
+      if (s.isNotEmpty) {
+        canComplete = s.first['driver_can_complete_trip'] != false;
+      }
+    }
+
+    return {'trips': board, 'tripOrders': tripOrders, 'canComplete': canComplete};
+  }
+
+  static Future<bool> _patch(String url, Map<String, dynamic> body, String jwt) async {
+    try {
+      final res = await http
+          .patch(Uri.parse(url),
+              headers: {..._headers(jwt), 'Prefer': 'return=minimal'},
+              body: jsonEncode(body))
+          .timeout(const Duration(seconds: 10));
+      return res.statusCode >= 200 && res.statusCode < 300;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  static String _now() => DateTime.now().toUtc().toIso8601String();
+
+  static Future<bool> pickupOrder(String id, String jwt) => _patch(
+      '$_rest/orders?id=eq.$id',
+      {'status': 'picked', 'picked_at': _now(), 'updated_at': _now()},
+      jwt);
+
+  static Future<bool> pickupAll(List<String> ids, String jwt) => _patch(
+      '$_rest/orders?id=in.(${ids.join(',')})',
+      {'status': 'picked', 'picked_at': _now(), 'updated_at': _now()},
+      jwt);
+
+  static Future<bool> deliverOrder(String id, String pay, double amount,
+          String? note, String jwt) =>
+      _patch(
+          '$_rest/orders?id=eq.$id',
+          {
+            'status': 'delivered',
+            'payment_method': pay,
+            'collected_amount': amount,
+            'driver_notes': note,
+            'delivered_at': _now(),
+            'updated_at': _now(),
+          },
+          jwt);
+
+  static Future<bool> failOrder(
+          String id, String reason, String? note, int attempt, String jwt) =>
+      _patch(
+          '$_rest/orders?id=eq.$id',
+          {
+            'status': 'failed',
+            'postpone_reason': reason,
+            'driver_notes': note,
+            'attempt_count': attempt + 1,
+            'updated_at': _now(),
+          },
+          jwt);
+
+  static Future<bool> retryOrder(String id, String jwt) => _patch(
+      '$_rest/orders?id=eq.$id',
+      {'status': 'picked', 'picked_at': _now(), 'updated_at': _now()},
+      jwt);
+
+  static Future<bool> updateTrip(
+          String id, Map<String, dynamic> body, String jwt) =>
+      _patch('$_rest/trips?id=eq.$id', body, jwt);
+
+  static Future<void> releaseFailed(List<String> ids, String jwt) async {
+    if (ids.isEmpty) return;
+    await _patch(
+        '$_rest/orders?id=in.(${ids.join(',')})',
+        {
+          'status': 'postponed',
+          'driver_id': null,
+          'deliveryman': null,
+          'assigned_at': null,
+          'picked_at': null,
+          'updated_at': _now(),
+        },
+        jwt);
+  }
+
+  static Future<void> completeDelivered(List<String> ids, String jwt) async {
+    if (ids.isEmpty) return;
+    await _patch(
+        '$_rest/orders?id=in.(${ids.join(',')})',
+        {'status': 'completed', 'completed_at': _now(), 'updated_at': _now()},
+        jwt);
+  }
+
+  static Future<void> deleteTripOrder(
+      String tripId, String orderId, String jwt) async {
+    try {
+      await http
+          .delete(
+              Uri.parse(
+                  '$_rest/trip_orders?trip_id=eq.$tripId&order_id=eq.$orderId'),
+              headers: _headers(jwt))
+          .timeout(const Duration(seconds: 10));
+    } catch (_) {}
   }
 }
