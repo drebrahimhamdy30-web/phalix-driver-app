@@ -59,12 +59,14 @@ class TripsView extends StatefulWidget {
   final String branchId;
   final String jwt;
   final String driverName;
+  final String mode; // 'active' = الرحلة الجارية · 'previous' = آخر 3 رحلات
   const TripsView(
       {super.key,
       required this.driverId,
       required this.branchId,
       required this.jwt,
-      this.driverName = 'سائق'});
+      this.driverName = 'سائق',
+      this.mode = 'active'});
 
   @override
   State<TripsView> createState() => TripsViewState();
@@ -128,12 +130,27 @@ class TripsViewState extends State<TripsView> {
           MapEntry('$k', (v as List).cast<Map<String, dynamic>>()));
       _canComplete = board['canComplete'] == true;
       _reviewFlags = flags;
-      if (_selected == null || !_trips.any((t) => '${t['id']}' == _selected)) {
-        _selected = _trips.isNotEmpty ? '${_trips.first['id']}' : null;
+      final vis = _visibleTrips;
+      if (_selected == null || !vis.any((t) => '${t['id']}' == _selected)) {
+        _selected = vis.isNotEmpty ? '${vis.first['id']}' : null;
       }
       _loading = false;
     });
   }
+
+  // الرحلات الظاهرة حسب الوضع: الجارية فقط أو المكتملة (آخر 3)
+  List<Map<String, dynamic>> get _visibleTrips {
+    if (widget.mode == 'previous') {
+      return _trips.where((t) => t['status'] == 'completed').toList();
+    }
+    return _trips
+        .where((t) =>
+            ['active', 'pending_complete'].contains(t['status']) ||
+            '${t['id']}' == 'direct')
+        .toList();
+  }
+
+  bool get _isActiveMode => widget.mode != 'previous';
 
   Future<void> _run(Future<void> Function() action) async {
     if (_busy) return;
@@ -150,7 +167,10 @@ class TripsViewState extends State<TripsView> {
     if (_busy) return;
     setState(() => _busy = true);
     try {
+      _locSettings ??=
+          await Api.getLocationSettings(widget.branchId, widget.jwt);
       final res = await checkPickupLocation(_locSettings);
+      _reportLocCheck(res);
       if (!res.ok && mounted) await _showViolation(res);
       await Api.pickupOrder(id, widget.jwt);
       await Api.logOrder(id, 'order_picked', _buildPickupLog(res),
@@ -160,12 +180,27 @@ class TripsViewState extends State<TripsView> {
     if (mounted) setState(() => _busy = false);
   }
 
+  void _reportLocCheck(LocResult res) {
+    Api.debug('pickup_loc_check', {
+      'driver_id': widget.driverId,
+      'ok': res.ok,
+      'noLoc': res.noLoc,
+      'dist': res.distance,
+      'has_settings': _locSettings != null,
+      'enabled': _locSettings?['location_check_enabled'],
+      'radius': _locSettings?['pickup_radius_meters'],
+    });
+  }
+
   // استلام كل الطلبات مع فحص واحد للموقع
   Future<void> _pickupAll(List<String> ids) async {
     if (_busy || ids.isEmpty) return;
     setState(() => _busy = true);
     try {
+      _locSettings ??=
+          await Api.getLocationSettings(widget.branchId, widget.jwt);
       final res = await checkPickupLocation(_locSettings);
+      _reportLocCheck(res);
       if (!res.ok && mounted) await _showViolation(res);
       await Api.pickupAll(ids, widget.jwt);
       final log = _buildPickupLog(res, bulk: true);
@@ -217,25 +252,29 @@ class TripsViewState extends State<TripsView> {
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (_trips.isEmpty) {
+    final vis = _visibleTrips;
+    if (vis.isEmpty) {
       return RefreshIndicator(
         onRefresh: load,
-        child: ListView(children: const [
-          SizedBox(height: 160),
+        child: ListView(children: [
+          const SizedBox(height: 160),
           Center(
-              child: Text('🚗 لا توجد رحلات حالياً',
-                  style: TextStyle(color: Colors.grey, fontSize: 16))),
+              child: Text(
+                  _isActiveMode
+                      ? '🚗 لا توجد رحلة جارية'
+                      : '📋 لا توجد رحلات سابقة',
+                  style: const TextStyle(color: Colors.grey, fontSize: 16))),
         ]),
       );
     }
-    final trip = _trips.firstWhere((t) => '${t['id']}' == _selected,
-        orElse: () => _trips.first);
+    final trip = vis.firstWhere((t) => '${t['id']}' == _selected,
+        orElse: () => vis.first);
     final orders = _tripOrders['${trip['id']}'] ?? [];
     return Column(
       children: [
-        if (_showStats) _statsBar(),
-        if (_reviewFlags.isNotEmpty) _reviewBanner(),
-        _tabs(),
+        if (_isActiveMode && _showStats) _statsBar(),
+        if (_isActiveMode && _reviewFlags.isNotEmpty) _reviewBanner(),
+        if (vis.length > 1) _tabs(),
         if (_busy) const LinearProgressIndicator(minHeight: 2),
         Expanded(
           child: RefreshIndicator(
@@ -433,21 +472,22 @@ class TripsViewState extends State<TripsView> {
   }
 
   Widget _tabs() {
+    final vis = _visibleTrips;
     return SizedBox(
       height: 52,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-        itemCount: _trips.length,
+        itemCount: vis.length,
         separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (_, i) {
-          final t = _trips[i];
+          final t = vis[i];
           final id = '${t['id']}';
           final isActive =
               ['active', 'pending_complete'].contains(t['status']);
           final count = (_tripOrders[id] ?? []).length;
           final sel = id == _selected;
-          final label = isActive ? 'الرحلة الجارية' : 'رحلة ${i}';
+          final label = isActive ? 'الرحلة الجارية' : 'رحلة ${i + 1}';
           return InkWell(
             onTap: () => setState(() => _selected = id),
             child: Container(

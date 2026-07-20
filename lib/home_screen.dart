@@ -23,9 +23,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _ready = false;
   int _maxBreak = 15;
   int _tab = 0;
-  int? _rank;
-  int _rankTotal = 0;
   final GlobalKey<TripsViewState> _tripsKey = GlobalKey<TripsViewState>();
+  final GlobalKey<TripsViewState> _prevKey = GlobalKey<TripsViewState>();
   final GlobalKey<AttendanceBarState> _attKey =
       GlobalKey<AttendanceBarState>();
 
@@ -53,21 +52,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed) {
       _stopAlarms();
       _tripsKey.currentState?.load();
+      _prevKey.currentState?.load();
       _attKey.currentState?.refresh();
-      _loadRank();
     }
-  }
-
-  Future<void> _loadRank() async {
-    try {
-      final r = await Api.getRank(_driverId, _branchId, _jwt);
-      if (r != null && mounted) {
-        setState(() {
-          _rank = r['rank'] is int ? r['rank'] as int : null;
-          _rankTotal = r['total'] is int ? r['total'] as int : 0;
-        });
-      }
-    } catch (_) {}
   }
 
   Future<void> _init() async {
@@ -89,7 +76,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       final mb = await Api.getMaxBreak(_branchId, _jwt);
       if (mounted) setState(() => _maxBreak = mb);
     } catch (_) {}
-    _loadRank();
   }
 
   Future<void> _logout() async {
@@ -203,47 +189,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  Widget _rankBadge() {
-    final rank = _rank ?? 0;
-    final isNext = rank == 1;
-    final Color c = isNext
-        ? const Color(0xFF16a34a) // أخضر = دورك التالي
-        : (rank == 2 ? AppTheme.primary : AppTheme.appBar);
-    final String label = isNext
-        ? 'دورك الآن #1 — أنت التالي في التوزيع'
-        : 'دورك #$rank من $_rankTotal في طابور التوزيع';
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.fromLTRB(10, 10, 10, 0),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        color: c.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: c.withOpacity(0.45)),
-      ),
-      child: Row(
-        children: [
-          Icon(isNext ? Icons.emoji_events : Icons.format_list_numbered,
-              color: c, size: 22),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(label,
-                style: TextStyle(
-                    color: c, fontWeight: FontWeight.bold, fontSize: 14)),
-          ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-            decoration: BoxDecoration(
-                color: c, borderRadius: BorderRadius.circular(20)),
-            child: Text('#$rank',
-                style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13)),
-          ),
-        ],
-      ),
-    );
+  void _refreshCurrent() {
+    _tripsKey.currentState?.load();
+    _prevKey.currentState?.load();
+    _attKey.currentState?.refresh();
   }
 
   @override
@@ -256,14 +205,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         title: Text('أهلاً $_name · ${Config.appVersion}',
             style: const TextStyle(fontSize: 14)),
         actions: [
-          if (_tab == 0)
+          if (_tab != 2)
             IconButton(
-                onPressed: () {
-                  _tripsKey.currentState?.load();
-                  _attKey.currentState?.refresh();
-                  _loadRank();
-                },
-                icon: const Icon(Icons.refresh)),
+                onPressed: _refreshCurrent, icon: const Icon(Icons.refresh)),
           PopupMenuButton<String>(
             onSelected: (v) {
               if (v == 'pw') _changePassword();
@@ -286,7 +230,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   branchId: _branchId,
                   jwt: _jwt,
                 ),
-                if (_tab == 0 && _rank != null) _rankBadge(),
                 Expanded(
                   child: IndexedStack(
                     index: _tab,
@@ -297,6 +240,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                         branchId: _branchId,
                         jwt: _jwt,
                         driverName: _name,
+                        mode: 'active',
+                      ),
+                      TripsView(
+                        key: _prevKey,
+                        driverId: _driverId,
+                        branchId: _branchId,
+                        jwt: _jwt,
+                        driverName: _name,
+                        mode: 'previous',
                       ),
                       HoursView(
                         driverId: _driverId,
@@ -312,11 +264,14 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ? null
           : BottomNavigationBar(
               currentIndex: _tab,
+              type: BottomNavigationBarType.fixed,
               selectedItemColor: AppTheme.primary,
               onTap: (i) => setState(() => _tab = i),
               items: const [
                 BottomNavigationBarItem(
-                    icon: Icon(Icons.local_shipping), label: 'الرحلات'),
+                    icon: Icon(Icons.local_shipping), label: 'الرحلات الجارية'),
+                BottomNavigationBarItem(
+                    icon: Icon(Icons.history), label: 'الرحلات السابقة'),
                 BottomNavigationBarItem(
                     icon: Icon(Icons.access_time), label: 'ساعات العمل'),
               ],

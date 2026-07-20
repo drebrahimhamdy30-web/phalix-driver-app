@@ -21,6 +21,8 @@ class AttendanceBarState extends State<AttendanceBar> {
   Map<String, dynamic>? _rec; // آخر سجل
   bool _requireApproval = true;
   int _maxBreak = 15;
+  int? _rank;
+  int _rankTotal = 0;
   bool _loading = true;
   bool _busy = false;
   Timer? _timer;
@@ -54,9 +56,15 @@ class AttendanceBarState extends State<AttendanceBar> {
   // تُستدعى من الشاشة الأم عند الرجوع للتطبيق أو التحديث
   Future<void> refresh() async {
     final rec = await Api.getLatestAttendance(widget.driverId, widget.jwt);
+    Map<String, dynamic>? rank;
+    try {
+      rank = await Api.getRank(widget.driverId, widget.branchId, widget.jwt);
+    } catch (_) {}
     if (!mounted) return;
     setState(() {
       _rec = rec;
+      _rank = rank?['rank'] is int ? rank!['rank'] as int : null;
+      _rankTotal = rank?['total'] is int ? rank!['total'] as int : 0;
       _loading = false;
     });
     _setupTimer();
@@ -242,13 +250,17 @@ class AttendanceBarState extends State<AttendanceBar> {
                 ),
             ],
           ),
-          if (actions.isNotEmpty) ...[
-            const SizedBox(height: 8),
+          if (actions.isNotEmpty || _rank != null) ...[
+            const SizedBox(height: 6),
             Row(
               children: [
                 for (int i = 0; i < actions.length; i++) ...[
-                  if (i > 0) const SizedBox(width: 8),
+                  if (i > 0) const SizedBox(width: 6),
                   Expanded(child: actions[i]),
+                ],
+                if (_rank != null) ...[
+                  if (actions.isNotEmpty) const SizedBox(width: 8),
+                  _rankChip(),
                 ],
               ],
             ),
@@ -258,17 +270,42 @@ class AttendanceBarState extends State<AttendanceBar> {
     );
   }
 
+  Widget _rankChip() {
+    final r = _rank ?? 0;
+    final c = r == 1
+        ? const Color(0xFF16a34a)
+        : (r == 2 ? const Color(0xFFF97316) : const Color(0xFF475569));
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+          color: c.withOpacity(0.14),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: c.withOpacity(0.4))),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(_rankTotal > 0 ? 'دورك/$_rankTotal' : 'دورك',
+              style: TextStyle(fontSize: 9, color: c)),
+          Text('#$r',
+              style: TextStyle(
+                  fontSize: 14, fontWeight: FontWeight.bold, color: c)),
+        ],
+      ),
+    );
+  }
+
   Widget _btn(String text, Color color, VoidCallback onTap) {
     return SizedBox(
-      height: 40,
+      height: 32,
       child: ElevatedButton(
         onPressed: _busy ? null : onTap,
         style: ElevatedButton.styleFrom(
             backgroundColor: color,
             foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 4)),
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap),
         child: Text(text,
-            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
       ),
     );
   }

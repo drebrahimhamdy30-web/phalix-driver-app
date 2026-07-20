@@ -433,6 +433,17 @@ class Api {
     return {'ok': false, 'error': 'تعذّر الاتصال بالخادم'};
   }
 
+  // تسجيل تشخيصي (يذهب إلى driver_debug عبر driver-mark)
+  static Future<void> debug(String event, Map<String, dynamic> data) async {
+    try {
+      await http
+          .post(Uri.parse(Config.markUrl),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({'event': event, ...data}))
+          .timeout(const Duration(seconds: 5));
+    } catch (_) {}
+  }
+
   // إعدادات فحص موقع الاستلام للفرع
   static Future<Map<String, dynamic>?> getLocationSettings(
       String branchId, String jwt) async {
