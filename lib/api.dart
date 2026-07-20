@@ -285,6 +285,122 @@ class Api {
           '$_rest/driver_attendance?driver_id=eq.$driverId&date=gte.$fromDate&date=lte.$toDate&order=date.desc&limit=500&select=date,status,approved_at,ended_at',
           jwt);
 
+  // ===== الحضور والانصراف والاستراحة =====
+
+  // آخر سجل حضور (لتحديد الحالة الحالية للطيار)
+  static Future<Map<String, dynamic>?> getLatestAttendance(
+      String driverId, String jwt) async {
+    if (driverId.isEmpty) return null;
+    final s = await _getList(
+        '$_rest/driver_attendance?driver_id=eq.$driverId&order=created_at.desc&limit=1&select=id,status,approved_at,requested_at,ended_at,created_at',
+        jwt);
+    return s.isEmpty ? null : s.first;
+  }
+
+  // إعدادات الحضور للفرع
+  static Future<Map<String, dynamic>> getAttendanceSettings(
+      String branchId, String jwt) async {
+    if (branchId.isEmpty) return {'require_approval': true, 'max_break': 15};
+    final s = await _getList(
+        '$_rest/dispatch_settings?branch_id=eq.$branchId&select=require_attendance_approval,max_break_minutes',
+        jwt);
+    if (s.isEmpty) return {'require_approval': true, 'max_break': 15};
+    final r = s.first;
+    return {
+      'require_approval': r['require_attendance_approval'] != false,
+      'max_break': (r['max_break_minutes'] is num)
+          ? (r['max_break_minutes'] as num).toInt()
+          : 15,
+    };
+  }
+
+  // فحص إمكانية الانصراف — يرجّع رسالة منع أو null لو مسموح
+  static Future<String?> offlineBlockReason(
+      String driverId, String jwt) async {
+    final trips = await _getList(
+        '$_rest/trips?driver_id=eq.$driverId&status=eq.active&select=id&limit=1',
+        jwt);
+    if (trips.isNotEmpty) {
+      return 'لا يمكن طلب الانصراف — لديك رحلة جارية لم تنته بعد';
+    }
+    final orders = await _getList(
+        '$_rest/orders?driver_id=eq.$driverId&status=in.(assigned,picked)&select=id&limit=1',
+        jwt);
+    if (orders.isNotEmpty) {
+      return 'لا يمكن طلب الانصراف — لديك طلبات لم يتم توصيلها بعد';
+    }
+    return null;
+  }
+
+  // طلب حضور/انصراف/استراحة — type: online | offline | break
+  static Future<bool> requestAttendance(
+      String driverId, String type, bool requireApproval, String jwt) async {
+    final today = _todayLocal();
+    final nowIso = _now();
+    Map<String, dynamic> body;
+    if (requireApproval) {
+      const m = {
+        'online': 'online_request',
+        'offline': 'offline_request',
+        'break': 'break_request',
+      };
+      body = {
+        'driver_id': driverId,
+        'date': today,
+        'status': m[type],
+        'requested_at': nowIso,
+      };
+    } else {
+      body = {
+        'driver_id': driverId,
+        'date': today,
+        'status': type,
+        'requested_at': nowIso,
+        'approved_at': nowIso,
+      };
+    }
+    return _post('$_rest/driver_attendance', body, jwt);
+  }
+
+  // إنهاء الاستراحة (يدوي أو تلقائي) — يقفل سجل الاستراحة ويفتح سجل حضور جديد
+  static Future<bool> endBreak(
+      String recordId, String driverId, String jwt,
+      {bool auto = false}) async {
+    final nowIso = _now();
+    await _patch('$_rest/driver_attendance?id=eq.$recordId',
+        {'status': 'break_ended', 'ended_at': nowIso}, jwt);
+    return _post(
+        '$_rest/driver_attendance',
+        {
+          'driver_id': driverId,
+          'date': _todayLocal(),
+          'status': 'online',
+          'approved_at': nowIso,
+          'notes': auto ? 'استراحة انتهت تلقائياً' : 'إنهاء استراحة يدوي',
+        },
+        jwt);
+  }
+
+  // تاريخ اليوم المحلي (جهاز الطيار في مصر = توقيت القاهرة)
+  static String _todayLocal() {
+    final n = DateTime.now();
+    return '${n.year.toString().padLeft(4, '0')}-${n.month.toString().padLeft(2, '0')}-${n.day.toString().padLeft(2, '0')}';
+  }
+
+  static Future<bool> _post(
+      String url, Map<String, dynamic> body, String jwt) async {
+    try {
+      final res = await http
+          .post(Uri.parse(url),
+              headers: {..._headers(jwt), 'Prefer': 'return=minimal'},
+              body: jsonEncode(body))
+          .timeout(const Duration(seconds: 10));
+      return res.statusCode >= 200 && res.statusCode < 300;
+    } catch (_) {
+      return false;
+    }
+  }
+
   // تغيير كلمة المرور (عبر نقطة سيرفر تتحقق من الحالية وتشفّر الجديدة)
   static Future<Map<String, dynamic>> changePassword(
       String driverId, String oldPw, String newPw, String jwt) async {

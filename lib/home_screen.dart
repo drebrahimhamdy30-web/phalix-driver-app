@@ -6,6 +6,7 @@ import 'config.dart';
 import 'login_screen.dart';
 import 'trips_view.dart';
 import 'hours_view.dart';
+import 'attendance_view.dart';
 import 'main.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -25,6 +26,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   int? _rank;
   int _rankTotal = 0;
   final GlobalKey<TripsViewState> _tripsKey = GlobalKey<TripsViewState>();
+  final GlobalKey<AttendanceBarState> _attKey =
+      GlobalKey<AttendanceBarState>();
 
   @override
   void initState() {
@@ -50,6 +53,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed) {
       _stopAlarms();
       _tripsKey.currentState?.load();
+      _attKey.currentState?.refresh();
       _loadRank();
     }
   }
@@ -256,6 +260,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             IconButton(
                 onPressed: () {
                   _tripsKey.currentState?.load();
+                  _attKey.currentState?.refresh();
                   _loadRank();
                 },
                 icon: const Icon(Icons.refresh)),
@@ -275,6 +280,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ? const Center(child: CircularProgressIndicator())
           : Column(
               children: [
+                AttendanceBar(
+                  key: _attKey,
+                  driverId: _driverId,
+                  branchId: _branchId,
+                  jwt: _jwt,
+                ),
                 if (_tab == 0 && _rank != null) _rankBadge(),
                 Expanded(
                   child: IndexedStack(
