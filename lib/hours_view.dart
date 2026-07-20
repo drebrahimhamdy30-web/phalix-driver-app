@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'api.dart';
+import 'config.dart';
 
 const _arMonths = [
   '', 'يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو',
@@ -128,7 +129,7 @@ class _HoursViewState extends State<HoursView> {
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
             gradient: const LinearGradient(
-                colors: [Color(0xFF1a56db), Color(0xFF1e40af)]),
+                colors: [AppTheme.appBar, Color(0xFF334155)]),
             borderRadius: BorderRadius.circular(14),
           ),
           child: Row(
@@ -163,7 +164,7 @@ class _HoursViewState extends State<HoursView> {
               const Spacer(),
               Text('إجمالي: ${_fmTime(_monthEff)}',
                   style: const TextStyle(
-                      fontWeight: FontWeight.bold, color: Color(0xFF1a56db))),
+                      fontWeight: FontWeight.bold, color: AppTheme.primary)),
             ],
           ),
         ),
@@ -222,7 +223,7 @@ class _HoursViewState extends State<HoursView> {
                                               style: const TextStyle(
                                                   fontWeight: FontWeight.bold,
                                                   fontSize: 15,
-                                                  color: Color(0xFF1a56db))),
+                                                  color: AppTheme.primary)),
                                           const Text('عمل فعلي',
                                               style: TextStyle(
                                                   fontSize: 10,
@@ -265,7 +266,7 @@ class _HoursViewState extends State<HoursView> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
         decoration: BoxDecoration(
-          color: sel ? const Color(0xFF1a56db) : const Color(0xFFe5e7eb),
+          color: sel ? AppTheme.primary : const Color(0xFFe5e7eb),
           borderRadius: BorderRadius.circular(18),
         ),
         child: Text(label,

@@ -22,6 +22,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   bool _ready = false;
   int _maxBreak = 15;
   int _tab = 0;
+  int? _rank;
+  int _rankTotal = 0;
   final GlobalKey<TripsViewState> _tripsKey = GlobalKey<TripsViewState>();
 
   @override
@@ -48,7 +50,20 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     if (state == AppLifecycleState.resumed) {
       _stopAlarms();
       _tripsKey.currentState?.load();
+      _loadRank();
     }
+  }
+
+  Future<void> _loadRank() async {
+    try {
+      final r = await Api.getRank(_driverId, _branchId, _jwt);
+      if (r != null && mounted) {
+        setState(() {
+          _rank = r['rank'] is int ? r['rank'] as int : null;
+          _rankTotal = r['total'] is int ? r['total'] as int : 0;
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> _init() async {
@@ -70,6 +85,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       final mb = await Api.getMaxBreak(_branchId, _jwt);
       if (mounted) setState(() => _maxBreak = mb);
     } catch (_) {}
+    _loadRank();
   }
 
   Future<void> _logout() async {
@@ -183,19 +199,65 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
+  Widget _rankBadge() {
+    final rank = _rank ?? 0;
+    final isNext = rank == 1;
+    final Color c = isNext
+        ? const Color(0xFF16a34a) // أخضر = دورك التالي
+        : (rank == 2 ? AppTheme.primary : AppTheme.appBar);
+    final String label = isNext
+        ? 'دورك الآن #1 — أنت التالي في التوزيع'
+        : 'دورك #$rank من $_rankTotal في طابور التوزيع';
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.fromLTRB(10, 10, 10, 0),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: c.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: c.withOpacity(0.45)),
+      ),
+      child: Row(
+        children: [
+          Icon(isNext ? Icons.emoji_events : Icons.format_list_numbered,
+              color: c, size: 22),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(label,
+                style: TextStyle(
+                    color: c, fontWeight: FontWeight.bold, fontSize: 14)),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+            decoration: BoxDecoration(
+                color: c, borderRadius: BorderRadius.circular(20)),
+            child: Text('#$rank',
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFf1f5f9),
+      backgroundColor: AppTheme.bg,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1a56db),
-        foregroundColor: Colors.white,
+        backgroundColor: AppTheme.appBar,
+        foregroundColor: AppTheme.onAppBar,
         title: Text('أهلاً $_name · ${Config.appVersion}',
             style: const TextStyle(fontSize: 14)),
         actions: [
           if (_tab == 0)
             IconButton(
-                onPressed: () => _tripsKey.currentState?.load(),
+                onPressed: () {
+                  _tripsKey.currentState?.load();
+                  _loadRank();
+                },
                 icon: const Icon(Icons.refresh)),
           PopupMenuButton<String>(
             onSelected: (v) {
@@ -211,19 +273,26 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       ),
       body: !_ready
           ? const Center(child: CircularProgressIndicator())
-          : IndexedStack(
-              index: _tab,
+          : Column(
               children: [
-                TripsView(
-                  key: _tripsKey,
-                  driverId: _driverId,
-                  branchId: _branchId,
-                  jwt: _jwt,
-                ),
-                HoursView(
-                  driverId: _driverId,
-                  jwt: _jwt,
-                  maxBreak: _maxBreak,
+                if (_tab == 0 && _rank != null) _rankBadge(),
+                Expanded(
+                  child: IndexedStack(
+                    index: _tab,
+                    children: [
+                      TripsView(
+                        key: _tripsKey,
+                        driverId: _driverId,
+                        branchId: _branchId,
+                        jwt: _jwt,
+                      ),
+                      HoursView(
+                        driverId: _driverId,
+                        jwt: _jwt,
+                        maxBreak: _maxBreak,
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -231,7 +300,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           ? null
           : BottomNavigationBar(
               currentIndex: _tab,
-              selectedItemColor: const Color(0xFF1a56db),
+              selectedItemColor: AppTheme.primary,
               onTap: (i) => setState(() => _tab = i),
               items: const [
                 BottomNavigationBarItem(

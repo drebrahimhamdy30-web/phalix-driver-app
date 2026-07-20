@@ -325,8 +325,10 @@ class PhalixDriverApp extends StatelessWidget {
       debugShowCheckedModeBanner: false,
       locale: const Locale('ar'),
       theme: ThemeData(
-        primaryColor: const Color(0xFF1a56db),
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF1a56db)),
+        primaryColor: AppTheme.primary,
+        colorScheme: ColorScheme.fromSeed(
+            seedColor: AppTheme.primary, primary: AppTheme.primary),
+        scaffoldBackgroundColor: AppTheme.bg,
         fontFamily: 'Roboto',
         useMaterial3: true,
       ),

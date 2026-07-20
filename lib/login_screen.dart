@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'api.dart';
+import 'config.dart';
 import 'home_screen.dart';
 import 'main.dart';
 
@@ -63,7 +64,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFf1f5f9),
+      backgroundColor: AppTheme.bg,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -71,7 +72,7 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(Icons.local_shipping, size: 64, color: Color(0xFF1a56db)),
+                const Icon(Icons.local_shipping, size: 64, color: AppTheme.primary),
                 const SizedBox(height: 12),
                 const Text('Phalix — السائق',
                     style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold)),
@@ -112,7 +113,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           child: ElevatedButton(
                             onPressed: _loading ? null : _login,
                             style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF1a56db),
+                                backgroundColor: AppTheme.primary,
                                 foregroundColor: Colors.white),
                             child: _loading
                                 ? const SizedBox(

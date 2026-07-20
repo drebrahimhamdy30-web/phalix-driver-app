@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'api.dart';
+import 'config.dart';
 
 const _stLabel = {
   'pending': 'جاهز',
@@ -171,7 +172,7 @@ class TripsViewState extends State<TripsView> {
               padding: const EdgeInsets.symmetric(horizontal: 14),
               alignment: Alignment.center,
               decoration: BoxDecoration(
-                color: sel ? const Color(0xFF1a56db) : const Color(0xFFe5e7eb),
+                color: sel ? AppTheme.primary : const Color(0xFFe5e7eb),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Text('$label ($count)',
@@ -314,7 +315,7 @@ class TripsViewState extends State<TripsView> {
               style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFF1a56db))),
+                  color: AppTheme.primary)),
           if (collected != null && (collected is num ? collected : 0) != 0)
             Padding(
               padding: const EdgeInsets.only(top: 4),

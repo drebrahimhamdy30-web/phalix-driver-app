@@ -178,6 +178,94 @@ class Api {
     };
   }
 
+  // ترتيب/دور الطيار في طابور التوزيع بين الحاضرين بنفس الفرع
+  static Future<Map<String, dynamic>?> getRank(
+      String driverId, String branchId, String jwt) async {
+    if (branchId.isEmpty) return null;
+    try {
+      final s = await _getList(
+          '$_rest/dispatch_settings?branch_id=eq.$branchId&select=driver_priority',
+          jwt);
+      final priority =
+          s.isNotEmpty ? '${s.first['driver_priority'] ?? 'least_orders'}' : 'least_orders';
+
+      final drivers = await _getList(
+          '$_rest/drivers?branch_id=eq.$branchId&is_active=eq.true&select=id',
+          jwt);
+      final ids = drivers.map((d) => '${d['id']}').toList();
+      if (ids.isEmpty) return null;
+
+      final att = await _getList(
+          '$_rest/driver_attendance?driver_id=in.(${ids.join(',')})&order=created_at.desc&limit=500&select=driver_id,status,approved_at,created_at',
+          jwt);
+      final latest = <String, Map<String, dynamic>>{};
+      for (final r in att) {
+        final id = '${r['driver_id']}';
+        latest.putIfAbsent(id, () => r);
+      }
+      final online = latest.entries
+          .where((e) => e.value['status'] == 'online')
+          .map((e) => e.key)
+          .toList();
+      if (!online.contains(driverId)) return null; // مش حاضر
+      final total = online.length;
+
+      DateTime arr(String id) =>
+          DateTime.tryParse('${latest[id]?['approved_at']}') ??
+          DateTime.fromMillisecondsSinceEpoch(0);
+
+      int rank = 1;
+      if (priority != 'longest_idle') {
+        // الأقل طلبات أولاً
+        final orders = await _getList(
+            '$_rest/orders?status=in.(assigned,picked)&driver_id=in.(${online.join(',')})&select=driver_id',
+            jwt);
+        final count = {for (final id in online) id: 0};
+        for (final o in orders) {
+          final d = '${o['driver_id']}';
+          if (count.containsKey(d)) count[d] = count[d]! + 1;
+        }
+        final myCount = count[driverId] ?? 0;
+        final myArr = arr(driverId);
+        rank = online.where((id) {
+              final tc = count[id] ?? 0;
+              if (tc < myCount) return true;
+              if (tc == myCount) return arr(id).isBefore(myArr);
+              return false;
+            }).length +
+            1;
+      } else {
+        // الأطول فراغًا أولاً
+        final lastOrders = await _getList(
+            '$_rest/orders?driver_id=in.(${online.join(',')})&assigned_at=not.is.null&order=assigned_at.desc&select=driver_id,assigned_at',
+            jwt);
+        final lastAssigned = <String, DateTime>{};
+        for (final o in lastOrders) {
+          final d = '${o['driver_id']}';
+          if (!lastAssigned.containsKey(d)) {
+            lastAssigned[d] = DateTime.tryParse('${o['assigned_at']}') ??
+                DateTime.fromMillisecondsSinceEpoch(0);
+          }
+        }
+        for (final id in online) {
+          lastAssigned.putIfAbsent(id, () => arr(id));
+        }
+        final myLast =
+            lastAssigned[driverId] ?? DateTime.fromMillisecondsSinceEpoch(0);
+        rank = online
+                .where((id) =>
+                    (lastAssigned[id] ??
+                            DateTime.fromMillisecondsSinceEpoch(0))
+                        .isBefore(myLast))
+                .length +
+            1;
+      }
+      return {'rank': rank, 'total': total};
+    } catch (_) {
+      return null;
+    }
+  }
+
   // الحد الأقصى لدقائق الاستراحة (لحساب العمل الفعلي)
   static Future<int> getMaxBreak(String branchId, String jwt) async {
     if (branchId.isEmpty) return 15;
