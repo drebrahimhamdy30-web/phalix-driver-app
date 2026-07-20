@@ -44,8 +44,20 @@ Future<void> initNotifications() async {
       ?.createNotificationChannel(ordersChannel);
 }
 
+// تسجيل تشخيصي للخادم
+Future<void> _report(String event, Map<String, dynamic> data) async {
+  try {
+    await http
+        .post(Uri.parse(Config.markUrl),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'event': event, ...data}))
+        .timeout(const Duration(seconds: 5));
+  } catch (_) {}
+}
+
 // عرض إنذار مستمر (يعيد الصوت لحد ما يُفتح الطلب)
 Future<void> showAlarm(String title, String body) async {
+ try {
   await localNotifications.show(
     88, // معرّف ثابت — إشعار إنذار واحد يتجدّد
     title,
@@ -66,10 +78,13 @@ Future<void> showAlarm(String title, String body) async {
         ongoing: true, // لا يُمسح بالسحب — لازم يفتح التطبيق
         autoCancel: false,
         category: AndroidNotificationCategory.alarm,
-        fullScreenIntent: true, // يظهر كمكالمة حتى والشاشة مقفولة
       ),
     ),
   );
+  await _report('alarm_shown', {'note': body});
+ } catch (e) {
+  await _report('alarm_error', {'err': e.toString()});
+ }
 }
 
 Future<void> cancelAlarm() async {
