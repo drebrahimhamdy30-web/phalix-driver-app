@@ -17,7 +17,7 @@ class Config {
   static const String appSecret =
       '87bcac4b4da9317f3b8716e6af9269533f8e2228cc0db43b';
   // رقم إصدار داخلي للتشخيص
-  static const String appVersion = 'poll-v10';
+  static const String appVersion = 'poll-v11';
   // كل كام ثانية تسحب الخدمة الطلبات الجديدة
   static const int pollIntervalMs = 10000;
 

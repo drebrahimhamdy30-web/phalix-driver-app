@@ -187,21 +187,15 @@ class AlarmTaskHandler extends TaskHandler {
     final events = await _fetchEvents();
     if (events.isEmpty) return;
     final ackIds = <int>[];
-    bool loud = false;
+    // كل التنبيهات موحّدة: إنذار عالٍ مستمر لحد ما يُفتح
     for (final e in events) {
       final id = e['id'];
       if (id is int) ackIds.add(id);
-      final type = '${e['type']}';
       final title = '${e['title'] ?? 'تنبيه'}';
       final body = '${e['body'] ?? ''}';
-      if (type == 'order_added' || type == 'summon') {
-        await showAlarm(title, body); // إنذار عالٍ مستمر
-        loud = true;
-      } else {
-        await showNotify(title, body); // إشعار عادي (سحب طلب / رسالة)
-      }
+      await showAlarm(title, body);
     }
-    if (loud) await startAlarmSound();
+    await startAlarmSound();
     _pendingAck = ackIds; // تُؤكَّد في السحبة الجاية
   }
 
