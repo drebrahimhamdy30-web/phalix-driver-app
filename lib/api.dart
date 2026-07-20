@@ -70,11 +70,15 @@ class Api {
         '&status=in.(assigned,picked,failed)'
         '&select=id,bill_no,customer_name,customer_phone,customer_address,cust_region,total_bill_net,status'
         '&order=assigned_at.desc';
-    final res = await http.get(Uri.parse(url), headers: _headers(jwt));
-    if (res.statusCode == 200) {
-      final list = jsonDecode(res.body) as List;
-      return list.map((e) => Map<String, dynamic>.from(e)).toList();
-    }
+    try {
+      final res = await http
+          .get(Uri.parse(url), headers: _headers(jwt))
+          .timeout(const Duration(seconds: 8));
+      if (res.statusCode == 200) {
+        final list = jsonDecode(res.body) as List;
+        return list.map((e) => Map<String, dynamic>.from(e)).toList();
+      }
+    } catch (_) {}
     return [];
   }
 }

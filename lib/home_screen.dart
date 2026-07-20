@@ -50,17 +50,23 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _init() async {
-    // إيقاف صوت الإنذار بمجرد فتح التطبيق (الخدمة + الواجهة)
-    FlutterForegroundTask.sendDataToTask('stop_alarm');
-    await stopAlarmSound();
-    await cancelAlarm();
     final prefs = await SharedPreferences.getInstance();
     _name = prefs.getString('driver_name') ?? 'سائق';
     _driverId = prefs.getString('driver_id') ?? '';
     _jwt = prefs.getString('jwt') ?? '';
-    // التأكد إن خدمة الخلفية شغّالة
-    if (_driverId.isNotEmpty) await startAlarmService(_driverId);
-    _fcmOk = true; // التنبيهات تعمل عبر الخدمة الدائمة (سحب مباشر)
+    // جاهز فورًا — التنبيهات تعمل عبر الخدمة الدائمة (سحب مباشر)
+    _fcmOk = true;
+    if (mounted) setState(() {});
+    // إيقاف أي إنذار شغّال
+    try {
+      FlutterForegroundTask.sendDataToTask('stop_alarm');
+      await stopAlarmSound();
+      await cancelAlarm();
+    } catch (_) {}
+    // التأكد إن خدمة الخلفية شغّالة (بدون تعليق الواجهة)
+    try {
+      if (_driverId.isNotEmpty) await startAlarmService(_driverId);
+    } catch (_) {}
     await _loadOrders();
   }
 
