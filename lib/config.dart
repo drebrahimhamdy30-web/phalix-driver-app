@@ -17,12 +17,12 @@ class Config {
   static const String appSecret =
       '87bcac4b4da9317f3b8716e6af9269533f8e2228cc0db43b';
   // رقم إصدار داخلي للتشخيص
-  static const String appVersion = 'poll-v6';
+  static const String appVersion = 'poll-v7';
   // كل كام ثانية تسحب الخدمة الطلبات الجديدة
   static const int pollIntervalMs = 10000;
 
   // قناة الإنذار (صوت إنذار مستمر عالي) — قنوات أندرويد ثابتة فأي تغيير للصوت يتطلب معرّف قناة جديد
-  static const String channelId = 'phalix_alarm_v3';
+  static const String channelId = 'phalix_alarm_v4';
   static const String channelName = 'طلبات التوصيل (إنذار)';
   static const String channelDesc = 'إشعارات الطلبات الجديدة للسائق بصوت إنذار مستمر';
 

@@ -6,6 +6,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'config.dart';
@@ -19,18 +20,36 @@ final FlutterLocalNotificationsPlugin localNotifications =
 final Int64List _vibration =
     Int64List.fromList([0, 800, 400, 800, 400, 800, 400, 800]);
 
-// قناة الإنذار (صوت عالي مستمر + اهتزاز)
+// قناة الإنذار (الصوت يُشغَّل بمشغّل الصوت في حلقة، فالقناة صامتة + اهتزاز)
 final AndroidNotificationChannel ordersChannel = AndroidNotificationChannel(
   Config.channelId,
   Config.channelName,
   description: Config.channelDesc,
   importance: Importance.max,
-  playSound: true,
-  sound: const RawResourceAndroidNotificationSound('alert'),
-  audioAttributesUsage: AudioAttributesUsage.alarm,
+  playSound: false,
   enableVibration: true,
   vibrationPattern: _vibration,
 );
+
+// مشغّل صوت الإنذار (حلقة مستمرة)
+AudioPlayer? _alarmPlayer;
+Future<void> startAlarmSound() async {
+  try {
+    _alarmPlayer ??= AudioPlayer();
+    await _alarmPlayer!.setReleaseMode(ReleaseMode.loop);
+    await _alarmPlayer!.setVolume(1.0);
+    await _alarmPlayer!.play(AssetSource('alert.mp3'), volume: 1.0);
+    await _report('sound_started', {});
+  } catch (e) {
+    await _report('sound_error', {'err': e.toString()});
+  }
+}
+
+Future<void> stopAlarmSound() async {
+  try {
+    await _alarmPlayer?.stop();
+  } catch (_) {}
+}
 
 // تهيئة نظام الإشعارات + قناة الإنذار (تُستدعى في كل عملية/isolate)
 Future<void> initNotifications() async {
@@ -69,15 +88,13 @@ Future<void> showAlarm(String title, String body) async {
         channelDescription: Config.channelDesc,
         importance: Importance.max,
         priority: Priority.max,
-        playSound: true,
-        sound: const RawResourceAndroidNotificationSound('alert'),
-        audioAttributesUsage: AudioAttributesUsage.alarm,
+        playSound: false, // الصوت يُشغَّل بمشغّل الصوت في حلقة مستمرة
         enableVibration: true,
         vibrationPattern: _vibration,
-        additionalFlags: Int32List.fromList(<int>[4]), // FLAG_INSISTENT: يكرّر الصوت
         ongoing: true, // لا يُمسح بالسحب — لازم يفتح التطبيق
         autoCancel: false,
         category: AndroidNotificationCategory.alarm,
+        fullScreenIntent: true, // يظهر بارزًا حتى والشاشة مقفولة
       ),
     ),
   );
@@ -161,10 +178,9 @@ class AlarmTaskHandler extends TaskHandler {
                 body: jsonEncode({'driver_id': _driverId, 'bill': '$bill'}))
             .timeout(const Duration(seconds: 5));
       } catch (_) {}
-      try {
-        await showAlarm('📦 طلب جديد وصلك!',
-            'طلب #$bill${region != '' ? ' - $region' : ''}');
-      } catch (_) {}
+      await showAlarm('📦 طلب جديد وصلك!',
+          'طلب #$bill${region != '' ? ' - $region' : ''}');
+      await startAlarmSound(); // صوت إنذار عالٍ مستمر لحد ما يُفتح
       _baseline = _maxAssigned(orders, _baseline);
       await FlutterForegroundTask.saveData(
           key: 'baseline', value: _baseline.toIso8601String());
@@ -201,12 +217,23 @@ class AlarmTaskHandler extends TaskHandler {
 
   @override
   void onNotificationPressed() {
-    FlutterForegroundTask.launchApp('/');
+    stopAlarmSound();
     cancelAlarm();
+    FlutterForegroundTask.launchApp('/');
   }
 
   @override
-  Future<void> onDestroy(DateTime timestamp, bool isTimeout) async {}
+  void onReceiveData(Object data) {
+    if (data == 'stop_alarm') {
+      stopAlarmSound();
+      cancelAlarm();
+    }
+  }
+
+  @override
+  Future<void> onDestroy(DateTime timestamp, bool isTimeout) async {
+    await stopAlarmSound();
+  }
 }
 
 // بدء خدمة الخلفية
@@ -277,6 +304,7 @@ Future<void> _fgMessage(RemoteMessage message) async {
   final b =
       message.notification?.body ?? message.data['body'] ?? 'وصلك طلب جديد';
   await showAlarm(t, b);
+  await startAlarmSound();
 }
 
 Future<void> main() async {

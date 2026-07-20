@@ -32,7 +32,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _init() async {
-    // إيقاف صوت الإنذار بمجرد فتح التطبيق
+    // إيقاف صوت الإنذار بمجرد فتح التطبيق (الخدمة + الواجهة)
+    FlutterForegroundTask.sendDataToTask('stop_alarm');
+    await stopAlarmSound();
     await cancelAlarm();
     final prefs = await SharedPreferences.getInstance();
     _name = prefs.getString('driver_name') ?? 'سائق';
