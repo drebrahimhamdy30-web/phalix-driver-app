@@ -61,16 +61,53 @@ Future<void> stopAlarmSound() async {
   } catch (_) {}
 }
 
-// تهيئة نظام الإشعارات + قناة الإنذار (تُستدعى في كل عملية/isolate)
+// قناة الإشعارات العادية (رسائل/سحب طلب) — صوت افتراضي قصير
+final AndroidNotificationChannel notifyChannel = AndroidNotificationChannel(
+  Config.notifyChannelId,
+  Config.notifyChannelName,
+  description: Config.notifyChannelDesc,
+  importance: Importance.high,
+  playSound: true,
+  enableVibration: true,
+);
+
+// تهيئة نظام الإشعارات + القنوات (تُستدعى في كل عملية/isolate)
 Future<void> initNotifications() async {
   const initSettings = InitializationSettings(
     android: AndroidInitializationSettings('@mipmap/ic_launcher'),
   );
   await localNotifications.initialize(initSettings);
-  await localNotifications
-      .resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>()
-      ?.createNotificationChannel(ordersChannel);
+  final android = localNotifications.resolvePlatformSpecificImplementation<
+      AndroidFlutterLocalNotificationsPlugin>();
+  await android?.createNotificationChannel(ordersChannel);
+  await android?.createNotificationChannel(notifyChannel);
+}
+
+// إشعار عادي (رسالة إدارة / سحب طلب) — صوت قصير، يُمسح بالفتح
+int _notifyId = 200;
+Future<void> showNotify(String title, String body) async {
+  try {
+    _notifyId = _notifyId >= 260 ? 200 : _notifyId + 1;
+    await localNotifications.show(
+      _notifyId,
+      title,
+      body,
+      NotificationDetails(
+        android: AndroidNotificationDetails(
+          Config.notifyChannelId,
+          Config.notifyChannelName,
+          channelDescription: Config.notifyChannelDesc,
+          importance: Importance.high,
+          priority: Priority.high,
+          playSound: true,
+          enableVibration: true,
+          autoCancel: true,
+        ),
+      ),
+    );
+  } catch (e) {
+    await _report('notify_error', {'err': e.toString()});
+  }
 }
 
 // تسجيل تشخيصي للخادم
@@ -127,7 +164,7 @@ void startCallback() {
 class AlarmTaskHandler extends TaskHandler {
   bool _busy = false;
   String _driverId = '';
-  DateTime _baseline = DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+  List<int> _pendingAck = [];
 
   @override
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
@@ -136,30 +173,7 @@ class AlarmTaskHandler extends TaskHandler {
     await initNotifications();
     _driverId =
         (await FlutterForegroundTask.getData<String>(key: 'driver_id')) ?? '';
-    final savedBase =
-        await FlutterForegroundTask.getData<String>(key: 'baseline');
-    if (savedBase != null && savedBase.isNotEmpty) {
-      _baseline = DateTime.tryParse(savedBase)?.toUtc() ?? _baseline;
-    } else {
-      // تهيئة خط الأساس: لا ننبّه على الطلبات الموجودة مسبقًا
-      final orders = await _fetch();
-      _baseline = _maxAssigned(orders, _baseline);
-      await FlutterForegroundTask.saveData(
-          key: 'baseline', value: _baseline.toIso8601String());
-    }
-    // تشخيص: تأكيد أن خدمة النسخة الجديدة اشتغلت فعلاً
-    try {
-      await http
-          .post(Uri.parse(Config.markUrl),
-              headers: {'Content-Type': 'application/json'},
-              body: jsonEncode({
-                'event': 'start',
-                'v': Config.appVersion,
-                'driver_id': _driverId,
-                'baseline': _baseline.toIso8601String()
-              }))
-          .timeout(const Duration(seconds: 5));
-    } catch (_) {}
+    await _report('start', {'v': Config.appVersion, 'driver_id': _driverId});
   }
 
   @override
@@ -170,59 +184,49 @@ class AlarmTaskHandler extends TaskHandler {
   }
 
   Future<void> _poll() async {
-    final orders = await _fetch();
-    if (orders.isEmpty) return;
-    final fresh = orders.where((o) {
-      final a = DateTime.tryParse('${o['assigned_at']}')?.toUtc();
-      return a != null && a.isAfter(_baseline);
-    }).toList();
-    if (fresh.isNotEmpty) {
-      final o = fresh.first; // الأحدث (مرتّبة تنازليًا)
-      final bill = o['bill_no'] ?? '';
-      final region = o['cust_region'] ?? '';
-      // تشخيص: تأكيد وصول الكود لنقطة الإنذار
-      try {
-        await http
-            .post(Uri.parse(Config.markUrl),
-                headers: {'Content-Type': 'application/json'},
-                body: jsonEncode({'driver_id': _driverId, 'bill': '$bill'}))
-            .timeout(const Duration(seconds: 5));
-      } catch (_) {}
-      await showAlarm('📦 طلب جديد وصلك!',
-          'طلب #$bill${region != '' ? ' - $region' : ''}');
-      await startAlarmSound(); // صوت إنذار عالٍ مستمر لحد ما يُفتح
-      _baseline = _maxAssigned(orders, _baseline);
-      await FlutterForegroundTask.saveData(
-          key: 'baseline', value: _baseline.toIso8601String());
+    final events = await _fetchEvents();
+    if (events.isEmpty) return;
+    final ackIds = <int>[];
+    bool loud = false;
+    for (final e in events) {
+      final id = e['id'];
+      if (id is int) ackIds.add(id);
+      final type = '${e['type']}';
+      final title = '${e['title'] ?? 'تنبيه'}';
+      final body = '${e['body'] ?? ''}';
+      if (type == 'order_added' || type == 'summon') {
+        await showAlarm(title, body); // إنذار عالٍ مستمر
+        loud = true;
+      } else {
+        await showNotify(title, body); // إشعار عادي (سحب طلب / رسالة)
+      }
     }
+    if (loud) await startAlarmSound();
+    _pendingAck = ackIds; // تُؤكَّد في السحبة الجاية
   }
 
-  Future<List<Map<String, dynamic>>> _fetch() async {
+  Future<List<Map<String, dynamic>>> _fetchEvents() async {
+    final toAck = _pendingAck;
     try {
       final res = await http
           .post(
             Uri.parse(Config.pollUrl),
             headers: {'Content-Type': 'application/json'},
-            body: jsonEncode(
-                {'driver_id': _driverId, 'secret': Config.appSecret}),
+            body: jsonEncode({
+              'driver_id': _driverId,
+              'secret': Config.appSecret,
+              'ack': toAck,
+            }),
           )
           .timeout(const Duration(seconds: 8));
+      _pendingAck = []; // اتبعتت للتأكيد
       if (res.statusCode != 200) return [];
       final data = jsonDecode(res.body);
-      final list = (data is Map ? data['orders'] : null) as List? ?? [];
+      final list = (data is Map ? data['events'] : null) as List? ?? [];
       return list.map((e) => Map<String, dynamic>.from(e)).toList();
     } catch (_) {
       return [];
     }
-  }
-
-  DateTime _maxAssigned(List<Map<String, dynamic>> orders, DateTime current) {
-    var mx = current;
-    for (final o in orders) {
-      final a = DateTime.tryParse('${o['assigned_at']}')?.toUtc();
-      if (a != null && a.isAfter(mx)) mx = a;
-    }
-    return mx;
   }
 
   @override

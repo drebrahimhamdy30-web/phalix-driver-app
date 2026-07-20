@@ -17,7 +17,7 @@ class Config {
   static const String appSecret =
       '87bcac4b4da9317f3b8716e6af9269533f8e2228cc0db43b';
   // رقم إصدار داخلي للتشخيص
-  static const String appVersion = 'poll-v9';
+  static const String appVersion = 'poll-v10';
   // كل كام ثانية تسحب الخدمة الطلبات الجديدة
   static const int pollIntervalMs = 10000;
 
@@ -25,6 +25,11 @@ class Config {
   static const String channelId = 'phalix_alarm_v4';
   static const String channelName = 'طلبات التوصيل (إنذار)';
   static const String channelDesc = 'إشعارات الطلبات الجديدة للسائق بصوت إنذار مستمر';
+
+  // قناة الإشعارات العادية (رسائل/سحب طلب) — بصوت افتراضي قصير
+  static const String notifyChannelId = 'phalix_notify_v1';
+  static const String notifyChannelName = 'تنبيهات وإشعارات';
+  static const String notifyChannelDesc = 'رسائل الإدارة وتنبيهات سحب الطلبات';
 
   // قناة الخدمة الدائمة (إشعار صامت ثابت يوضّح أن التطبيق يعمل)
   static const String serviceChannelId = 'phalix_service';
