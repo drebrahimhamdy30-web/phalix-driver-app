@@ -171,10 +171,15 @@ class TripsViewState extends State<TripsView> {
           await Api.getLocationSettings(widget.branchId, widget.jwt);
       final res = await checkPickupLocation(_locSettings);
       _reportLocCheck(res);
-      if (!res.ok && mounted) await _showViolation(res);
-      await Api.pickupOrder(id, widget.jwt);
-      await Api.logOrder(id, 'order_picked', _buildPickupLog(res),
-          widget.driverId, widget.driverName, widget.jwt);
+      if (res.noLoc) {
+        // الموقع مش متاح → امنع الاستلام لحد ما يشغّل الـGPS
+        if (mounted) await _showLocationRequired();
+      } else {
+        if (!res.ok && mounted) await _showViolation(res);
+        await Api.pickupOrder(id, widget.jwt);
+        await Api.logOrder(id, 'order_picked', _buildPickupLog(res),
+            widget.driverId, widget.driverName, widget.jwt);
+      }
     } catch (_) {}
     await load();
     if (mounted) setState(() => _busy = false);
@@ -201,12 +206,17 @@ class TripsViewState extends State<TripsView> {
           await Api.getLocationSettings(widget.branchId, widget.jwt);
       final res = await checkPickupLocation(_locSettings);
       _reportLocCheck(res);
-      if (!res.ok && mounted) await _showViolation(res);
-      await Api.pickupAll(ids, widget.jwt);
-      final log = _buildPickupLog(res, bulk: true);
-      for (final id in ids) {
-        await Api.logOrder(id, 'order_picked', log, widget.driverId,
-            widget.driverName, widget.jwt);
+      if (res.noLoc) {
+        // الموقع مش متاح → امنع الاستلام لحد ما يشغّل الـGPS
+        if (mounted) await _showLocationRequired();
+      } else {
+        if (!res.ok && mounted) await _showViolation(res);
+        await Api.pickupAll(ids, widget.jwt);
+        final log = _buildPickupLog(res, bulk: true);
+        for (final id in ids) {
+          await Api.logOrder(id, 'order_picked', log, widget.driverId,
+              widget.driverName, widget.jwt);
+        }
       }
     } catch (_) {}
     await load();
@@ -227,6 +237,24 @@ class TripsViewState extends State<TripsView> {
       if (res.noLoc) m['no_location'] = true;
     }
     return m;
+  }
+
+  // يمنع الاستلام لو الـGPS/الموقع مش متاح
+  Future<void> _showLocationRequired() async {
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('📍 الموقع غير مفعّل'),
+        content: const Text(
+            'مش قادر أحدّد موقعك، فمش هينفع تستلم الطلب دلوقتي.\n\nشغّل الـGPS (خدمة الموقع) من الموبايل واسمح للتطبيق بالوصول للموقع، وبعدين حاول تستلم تاني.',
+            style: TextStyle(height: 1.5)),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('حسناً')),
+        ],
+      ),
+    );
   }
 
   Future<void> _showViolation(LocResult res) async {
