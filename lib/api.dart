@@ -98,7 +98,7 @@ class Api {
     return [];
   }
 
-  // تحميل لوحة الطيار: الرحلة الجارية + آخر 3 رحلات + طلباتها
+  // تحميل لوحة الطيار: الرحلة الجارية + آخر 3 رحلات + طلباتها (مُحسّن: نداءات أقل)
   static Future<Map<String, dynamic>> loadBoard(
       String driverId, String? branchId, String jwt) async {
     final trips = await _getList(
@@ -113,17 +113,32 @@ class Api {
     if (active.isNotEmpty) board.add(active.first);
     board.addAll(completed);
 
-    final tripOrders = <String, List<Map<String, dynamic>>>{};
-    for (final trip in board) {
-      final tid = '${trip['id']}';
-      final to = await _getList(
-          '$_rest/trip_orders?trip_id=eq.$tid&select=order_id', jwt);
-      final ids = to.map((x) => '${x['order_id']}').toList();
-      if (ids.isNotEmpty) {
-        tripOrders[tid] = await _getList(
-            '$_rest/orders?id=in.(${ids.join(',')})&select=*', jwt);
-      } else {
-        tripOrders[tid] = [];
+    final tripOrders = <String, List<Map<String, dynamic>>>{
+      for (final t in board) '${t['id']}': <Map<String, dynamic>>[]
+    };
+    final tripIds = board.map((t) => '${t['id']}').toList();
+    if (tripIds.isNotEmpty) {
+      final links = await _getList(
+          '$_rest/trip_orders?trip_id=in.(${tripIds.join(',')})&select=trip_id,order_id',
+          jwt);
+      final byTrip = <String, List<String>>{};
+      final allIds = <String>{};
+      for (final l in links) {
+        final tid = '${l['trip_id']}';
+        final oid = '${l['order_id']}';
+        byTrip.putIfAbsent(tid, () => []).add(oid);
+        allIds.add(oid);
+      }
+      if (allIds.isNotEmpty) {
+        final orders = await _getList(
+            '$_rest/orders?id=in.(${allIds.join(',')})&select=*', jwt);
+        final byId = {for (final o in orders) '${o['id']}': o};
+        for (final tid in byTrip.keys) {
+          tripOrders[tid] = byTrip[tid]!
+              .map((id) => byId[id])
+              .whereType<Map<String, dynamic>>()
+              .toList();
+        }
       }
     }
 
@@ -143,16 +158,64 @@ class Api {
     }
 
     bool canComplete = true;
+    int maxBreak = 15;
     if (branchId != null && branchId.isNotEmpty) {
       final s = await _getList(
-          '$_rest/dispatch_settings?branch_id=eq.$branchId&select=driver_can_complete_trip',
+          '$_rest/dispatch_settings?branch_id=eq.$branchId&select=driver_can_complete_trip,max_break_minutes',
           jwt);
       if (s.isNotEmpty) {
         canComplete = s.first['driver_can_complete_trip'] != false;
+        final mb = s.first['max_break_minutes'];
+        if (mb is num) maxBreak = mb.toInt();
       }
     }
 
-    return {'trips': board, 'tripOrders': tripOrders, 'canComplete': canComplete};
+    return {
+      'trips': board,
+      'tripOrders': tripOrders,
+      'canComplete': canComplete,
+      'maxBreak': maxBreak,
+    };
+  }
+
+  // الحد الأقصى لدقائق الاستراحة (لحساب العمل الفعلي)
+  static Future<int> getMaxBreak(String branchId, String jwt) async {
+    if (branchId.isEmpty) return 15;
+    final s = await _getList(
+        '$_rest/dispatch_settings?branch_id=eq.$branchId&select=max_break_minutes',
+        jwt);
+    if (s.isNotEmpty && s.first['max_break_minutes'] is num) {
+      return (s.first['max_break_minutes'] as num).toInt();
+    }
+    return 15;
+  }
+
+  // سجلات الحضور خلال فترة (لحساب ساعات العمل)
+  static Future<List<Map<String, dynamic>>> getAttendance(
+          String driverId, String fromDate, String toDate, String jwt) =>
+      _getList(
+          '$_rest/driver_attendance?driver_id=eq.$driverId&date=gte.$fromDate&date=lte.$toDate&order=date.desc&limit=500&select=date,status,approved_at,ended_at',
+          jwt);
+
+  // تغيير كلمة المرور (عبر نقطة سيرفر تتحقق من الحالية وتشفّر الجديدة)
+  static Future<Map<String, dynamic>> changePassword(
+      String driverId, String oldPw, String newPw, String jwt) async {
+    try {
+      final res = await http
+          .post(
+            Uri.parse('${Config.supabaseUrl}/functions/v1/change-password'),
+            headers: _headers(jwt),
+            body: jsonEncode({
+              'driver_id': driverId,
+              'old_password': oldPw,
+              'new_password': newPw,
+            }),
+          )
+          .timeout(const Duration(seconds: 15));
+      final data = jsonDecode(res.body);
+      if (data is Map) return Map<String, dynamic>.from(data);
+    } catch (_) {}
+    return {'ok': false, 'error': 'تعذّر الاتصال بالخادم'};
   }
 
   static Future<bool> _patch(String url, Map<String, dynamic> body, String jwt) async {
