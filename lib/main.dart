@@ -7,6 +7,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:vibration/vibration.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'config.dart';
@@ -39,6 +40,12 @@ Future<void> startAlarmSound() async {
     await _alarmPlayer!.setReleaseMode(ReleaseMode.loop);
     await _alarmPlayer!.setVolume(1.0);
     await _alarmPlayer!.play(AssetSource('alert.mp3'), volume: 1.0);
+    // اهتزاز متكرر مع الصوت
+    try {
+      if (await Vibration.hasVibrator()) {
+        Vibration.vibrate(pattern: [0, 700, 400, 700, 400], repeat: 0);
+      }
+    } catch (_) {}
     await _report('sound_started', {});
   } catch (e) {
     await _report('sound_error', {'err': e.toString()});
@@ -48,6 +55,9 @@ Future<void> startAlarmSound() async {
 Future<void> stopAlarmSound() async {
   try {
     await _alarmPlayer?.stop();
+  } catch (_) {}
+  try {
+    Vibration.cancel();
   } catch (_) {}
 }
 
