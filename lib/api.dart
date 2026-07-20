@@ -159,14 +159,20 @@ class Api {
 
     bool canComplete = true;
     int maxBreak = 15;
+    int lateAssigned = 10;
+    int latePicked = 30;
     if (branchId != null && branchId.isNotEmpty) {
       final s = await _getList(
-          '$_rest/dispatch_settings?branch_id=eq.$branchId&select=driver_can_complete_trip,max_break_minutes',
+          '$_rest/dispatch_settings?branch_id=eq.$branchId&select=driver_can_complete_trip,max_break_minutes,max_assigned_minutes,max_picked_minutes',
           jwt);
       if (s.isNotEmpty) {
         canComplete = s.first['driver_can_complete_trip'] != false;
         final mb = s.first['max_break_minutes'];
         if (mb is num) maxBreak = mb.toInt();
+        final ma = s.first['max_assigned_minutes'];
+        if (ma is num) lateAssigned = ma.toInt();
+        final mp = s.first['max_picked_minutes'];
+        if (mp is num) latePicked = mp.toInt();
       }
     }
 
@@ -175,6 +181,8 @@ class Api {
       'tripOrders': tripOrders,
       'canComplete': canComplete,
       'maxBreak': maxBreak,
+      'lateAssigned': lateAssigned,
+      'latePicked': latePicked,
     };
   }
 
@@ -451,6 +459,68 @@ class Api {
             }),
           )
           .timeout(const Duration(seconds: 10));
+    } catch (_) {}
+  }
+
+  // تسجيل لوج للرحلة (trip_logs)
+  static Future<void> logTrip(String tripId, String event,
+      Map<String, dynamic> details, String driverId, String driverName,
+      String jwt) async {
+    if (tripId.isEmpty || tripId == 'direct') return;
+    try {
+      await http
+          .post(
+            Uri.parse('$_rest/trip_logs'),
+            headers: {..._headers(jwt), 'Prefer': 'return=minimal'},
+            body: jsonEncode({
+              'trip_id': tripId,
+              'event': event,
+              'details': details,
+              'user_id': driverId,
+              'user_name': driverName,
+            }),
+          )
+          .timeout(const Duration(seconds: 10));
+    } catch (_) {}
+  }
+
+  // طلبات الرحلة السابقة غير المقفولة على نظام الصيدلية (B Connect)
+  static Future<List<Map<String, dynamic>>> getReviewFlags(
+      String tripId, String jwt) async {
+    if (tripId.isEmpty || tripId == 'direct') return [];
+    try {
+      final res = await http
+          .post(
+            Uri.parse('$_rest/rpc/get_trip_review_flags'),
+            headers: _headers(jwt),
+            body: jsonEncode({'p_trip_id': tripId}),
+          )
+          .timeout(const Duration(seconds: 10));
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        if (data is List) {
+          return data.map((e) => Map<String, dynamic>.from(e)).toList();
+        }
+      }
+    } catch (_) {}
+    return [];
+  }
+
+  // يشغّل فحص الرحلة السابقة على نظام الصيدلية عبر n8n (fire-and-forget)
+  static Future<void> triggerPrevTripCheck(
+      String driverId, String tripId) async {
+    if (driverId.isEmpty || tripId.isEmpty || tripId == 'direct') return;
+    try {
+      await http
+          .post(
+            Uri.parse(Config.checkPrevTripUrl),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'driver_id': driverId,
+              'current_trip_id': tripId,
+            }),
+          )
+          .timeout(const Duration(seconds: 8));
     } catch (_) {}
   }
 

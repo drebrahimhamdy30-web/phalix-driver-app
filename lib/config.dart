@@ -19,6 +19,10 @@ class Config {
   static const String loginUrl =
       'https://agent.ebrahimhamdy.com/webhook/login';
 
+  // webhook فحص طلبات الرحلة السابقة على نظام الصيدلية (B Connect)
+  static const String checkPrevTripUrl =
+      'https://agent.ebrahimhamdy.com/webhook/check_prev_trip';
+
   // نقطة سحب الطلبات الجديدة (خدمة الخلفية تناديها بشكل دوري)
   static const String pollUrl =
       '$supabaseUrl/functions/v1/driver-poll';
@@ -27,7 +31,7 @@ class Config {
   static const String appSecret =
       '87bcac4b4da9317f3b8716e6af9269533f8e2228cc0db43b';
   // رقم إصدار داخلي للتشخيص
-  static const String appVersion = 'poll-v18';
+  static const String appVersion = 'poll-v19';
   // كل كام ثانية تسحب الخدمة الطلبات الجديدة
   static const int pollIntervalMs = 10000;
 
