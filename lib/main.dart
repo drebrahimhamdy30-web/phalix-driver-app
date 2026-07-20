@@ -3,7 +3,6 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:audioplayers/audioplayers.dart';
@@ -294,27 +293,6 @@ Future<void> _requestPermissions() async {
   }
 }
 
-// ================= FCM (مسار احتياطي عند فتح التطبيق) =================
-@pragma('vm:entry-point')
-Future<void> _bgHandler(RemoteMessage message) async {
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  await initNotifications();
-  final t =
-      message.notification?.title ?? message.data['title'] ?? '📦 طلب جديد';
-  final b =
-      message.notification?.body ?? message.data['body'] ?? 'وصلك طلب جديد';
-  await showAlarm(t, b);
-}
-
-Future<void> _fgMessage(RemoteMessage message) async {
-  final t =
-      message.notification?.title ?? message.data['title'] ?? '📦 طلب جديد';
-  final b =
-      message.notification?.body ?? message.data['body'] ?? 'وصلك طلب جديد';
-  await showAlarm(t, b);
-  await startAlarmSound();
-}
-
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   FlutterForegroundTask.initCommunicationPort();
@@ -323,12 +301,7 @@ Future<void> main() async {
   await initNotifications();
   _initForegroundTask();
 
-  await FirebaseMessaging.instance
-      .requestPermission(alert: true, badge: true, sound: true);
   await _requestPermissions();
-
-  FirebaseMessaging.onBackgroundMessage(_bgHandler);
-  FirebaseMessaging.onMessage.listen(_fgMessage);
 
   final prefs = await SharedPreferences.getInstance();
   final driverId = prefs.getString('driver_id');

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'api.dart';
@@ -26,10 +25,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _init();
-    // تحديث التوكن لو اتغيّر
-    FirebaseMessaging.instance.onTokenRefresh.listen((t) async {
-      if (_driverId.isNotEmpty) await Api.saveFcmToken(_driverId, t, _jwt);
-    });
   }
 
   @override
@@ -65,13 +60,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _jwt = prefs.getString('jwt') ?? '';
     // التأكد إن خدمة الخلفية شغّالة
     if (_driverId.isNotEmpty) await startAlarmService(_driverId);
-    // إعادة تسجيل التوكن للتأكيد
-    try {
-      final token = await FirebaseMessaging.instance.getToken();
-      if (token != null && _driverId.isNotEmpty) {
-        _fcmOk = await Api.saveFcmToken(_driverId, token, _jwt);
-      }
-    } catch (_) {}
+    _fcmOk = true; // التنبيهات تعمل عبر الخدمة الدائمة (سحب مباشر)
     await _loadOrders();
   }
 

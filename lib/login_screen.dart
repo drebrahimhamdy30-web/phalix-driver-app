@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'api.dart';
@@ -50,15 +49,6 @@ class _LoginScreenState extends State<LoginScreen> {
     await prefs.setString('driver_name', driver['full_name'] ?? res['user'] ?? 'سائق');
     await prefs.setString('jwt', jwt);
     await prefs.setString('branch', res['branch'] ?? '');
-
-    // تسجيل توكن FCM
-    try {
-      final token = await FirebaseMessaging.instance.getToken();
-      if (token != null) {
-        await Api.saveFcmToken(driver['id'], token, jwt);
-        await prefs.setString('fcm_token', token);
-      }
-    } catch (_) {}
 
     // بدء خدمة الخلفية الدائمة (سحب الطلبات + الإنذار المستمر)
     await FlutterForegroundTask.clearAllData();
