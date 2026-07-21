@@ -951,10 +951,23 @@ class TripsViewState extends State<TripsView> {
       final amt = double.tryParse(amtCtrl.text.trim()) ?? 0;
       final note = noteCtrl.text.trim();
       await _run(() async {
+        // موقع التسليم (لحساب زمن الطريق والأداء) — لا يمنع التسليم
+        final dloc = await getCurrentLatLng();
         await Api.deliverOrder(
-            id, pay, amt, note.isEmpty ? null : note, widget.jwt);
-        await Api.logOrder(id, 'order_delivered', {'payment': pay, 'amount': amt},
-            widget.driverId, widget.driverName, widget.jwt);
+            id, pay, amt, note.isEmpty ? null : note, widget.jwt,
+            lat: dloc?['lat'], lng: dloc?['lng']);
+        await Api.logOrder(
+            id,
+            'order_delivered',
+            {
+              'payment': pay,
+              'amount': amt,
+              if (dloc != null) 'delivery_lat': dloc['lat'],
+              if (dloc != null) 'delivery_lng': dloc['lng'],
+            },
+            widget.driverId,
+            widget.driverName,
+            widget.jwt);
       });
     }
   }

@@ -68,6 +68,9 @@ Future<Map<String, double>?> _getMyLocation() async {
   }
 }
 
+// يجيب موقع الطيار الحالي (لموقع التسليم) — {lat,lng,acc} أو null
+Future<Map<String, double>?> getCurrentLatLng() => _getMyLocation();
+
 // يفحص موقع الاستلام مقابل إعدادات الفرع
 Future<LocResult> checkPickupLocation(Map<String, dynamic>? settings) async {
   if (settings == null) return const LocResult(ok: true);

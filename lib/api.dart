@@ -564,7 +564,8 @@ class Api {
       jwt);
 
   static Future<bool> deliverOrder(String id, String pay, double amount,
-          String? note, String jwt) =>
+          String? note, String jwt,
+          {double? lat, double? lng}) =>
       _patch(
           '$_rest/orders?id=eq.$id',
           {
@@ -574,6 +575,8 @@ class Api {
             'driver_notes': note,
             'delivered_at': _now(),
             'updated_at': _now(),
+            if (lat != null) 'delivery_lat': lat,
+            if (lng != null) 'delivery_lng': lng,
           },
           jwt);
 
