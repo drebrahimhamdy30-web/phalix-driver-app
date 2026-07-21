@@ -84,6 +84,7 @@ class TripsViewState extends State<TripsView> {
   int _lateAssigned = 10;
   int _latePicked = 30;
   bool _showStats = false;
+  bool _showRating = false;
   List<Map<String, dynamic>> _reviewFlags = [];
 
   Timer? _tick;
@@ -114,6 +115,7 @@ class TripsViewState extends State<TripsView> {
     _lateAssigned = board['lateAssigned'] is int ? board['lateAssigned'] : 10;
     _latePicked = board['latePicked'] is int ? board['latePicked'] : 30;
     _showStats = board['showStats'] == true;
+    _showRating = board['showRating'] == true;
     final trips = (board['trips'] as List).cast<Map<String, dynamic>>();
     // تنبيهات الرحلة السابقة غير المقفولة على نظام الصيدلية (للرحلة الجارية)
     final activeTrip = trips
@@ -464,6 +466,26 @@ class TripsViewState extends State<TripsView> {
                 fontSize: 11, color: c, fontWeight: FontWeight.w600)),
       );
 
+  // شارة تقييم الطلب (تظهر فقط لو الإعداد مفعّل)
+  Widget _ratingChip(Map<String, dynamic> o) {
+    final r = '${o['perf_rating']}';
+    final c = r == 'ممتاز'
+        ? const Color(0xFF16a34a)
+        : (r == 'متأخر' ? const Color(0xFFdc2626) : const Color(0xFFca8a04));
+    final fa = o['actual_minutes'];
+    final ex = o['expected_minutes'];
+    final extra = (fa != null && ex != null) ? ' ($fa/$ex د)' : '';
+    return Container(
+      margin: const EdgeInsets.only(left: 6, top: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+          color: c.withOpacity(0.12), borderRadius: BorderRadius.circular(8)),
+      child: Text('⭐ $r$extra',
+          style:
+              TextStyle(fontSize: 11, color: c, fontWeight: FontWeight.w700)),
+    );
+  }
+
   List<Widget> _orderTimers(Map<String, dynamic> o) {
     final chips = <Widget>[];
     final base = o['bill_date'] ?? o['created_at'];
@@ -648,7 +670,10 @@ class TripsViewState extends State<TripsView> {
             ),
             subtitle: Padding(
               padding: const EdgeInsets.only(top: 6),
-              child: Wrap(children: _orderTimers(o)),
+              child: Wrap(children: [
+                ..._orderTimers(o),
+                if (_showRating && o['perf_rating'] != null) _ratingChip(o),
+              ]),
             ),
           ),
           if (open) _orderDetail(o),
@@ -808,6 +833,8 @@ class TripsViewState extends State<TripsView> {
   Widget _summary(Map<String, dynamic> trip, List<Map<String, dynamic>> orders) {
     num total = 0, cash = 0;
     int done = 0;
+    num sumA = 0, sumE = 0, sumDist = 0;
+    int rated = 0;
     for (final o in orders) {
       total += (o['total_bill_net'] is num ? o['total_bill_net'] : 0);
       final st = o['status'];
@@ -817,8 +844,16 @@ class TripsViewState extends State<TripsView> {
           cash += _settleAmount(o);
         }
       }
+      if (o['perf_rating'] != null &&
+          o['actual_minutes'] is num &&
+          o['expected_minutes'] is num) {
+        rated++;
+        sumA += o['actual_minutes'] as num;
+        sumE += o['expected_minutes'] as num;
+      }
+      if (o['distance_meters'] is num) sumDist += o['distance_meters'] as num;
     }
-    return Container(
+    final box = Container(
       margin: const EdgeInsets.only(top: 6),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -849,6 +884,35 @@ class TripsViewState extends State<TripsView> {
         ],
       ),
     );
+    if (!_showRating || rated == 0) return box;
+    final ratio = sumE > 0 ? sumA / sumE : 1;
+    final tr = ratio <= 0.90 ? 'ممتاز' : (ratio >= 1.10 ? 'متأخر' : 'جيد');
+    final tc = tr == 'ممتاز'
+        ? const Color(0xFF16a34a)
+        : (tr == 'متأخر' ? const Color(0xFFdc2626) : const Color(0xFFca8a04));
+    return Column(children: [
+      box,
+      Container(
+        margin: const EdgeInsets.only(top: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        decoration: BoxDecoration(
+            color: tc.withOpacity(0.1),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: tc.withOpacity(0.4))),
+        child: Row(children: [
+          Icon(Icons.star, color: tc, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text('تقييم الرحلة: $tr',
+                style: TextStyle(color: tc, fontWeight: FontWeight.bold)),
+          ),
+          Text(
+              'فعلي ${sumA.toStringAsFixed(0)} / متوقع ${sumE.toStringAsFixed(0)} د'
+              '${sumDist > 0 ? ' · ${(sumDist / 1000).toStringAsFixed(1)} كم' : ''}',
+              style: TextStyle(fontSize: 11, color: tc)),
+        ]),
+      ),
+    ]);
   }
 
   // ============ نوافذ الأزرار ============
