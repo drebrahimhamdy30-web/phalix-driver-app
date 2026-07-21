@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:ota_update/ota_update.dart';
 import 'api.dart';
 import 'config.dart';
 import 'login_screen.dart';
@@ -76,6 +77,67 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       final mb = await Api.getMaxBreak(_branchId, _jwt);
       if (mounted) setState(() => _maxBreak = mb);
     } catch (_) {}
+    _checkUpdate();
+  }
+
+  // فحص آخر نسخة وعرض رسالة تحديث لو فيه أحدث
+  Future<void> _checkUpdate() async {
+    try {
+      final v = await Api.getLatestVersion();
+      if (v == null || !mounted) return;
+      final latest = v['version_code'] is int
+          ? v['version_code'] as int
+          : int.tryParse('${v['version_code']}') ?? 0;
+      final apkUrl = '${v['apk_url'] ?? ''}';
+      if (latest <= Config.appBuild || apkUrl.isEmpty) return;
+      _showUpdateDialog(apkUrl, v['force_update'] == true, '${v['notes'] ?? ''}');
+    } catch (_) {}
+  }
+
+  void _showUpdateDialog(String apkUrl, bool force, String notes) {
+    showDialog(
+      context: context,
+      barrierDismissible: !force,
+      builder: (ctx) => PopScope(
+        canPop: !force,
+        child: AlertDialog(
+          title: const Text('🔄 تحديث متاح'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('فيه نسخة أحدث من التطبيق. برجاء التحديث لآخر نسخة.'),
+              if (notes.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: Text(notes,
+                      style:
+                          const TextStyle(fontSize: 13, color: Colors.grey)),
+                ),
+            ],
+          ),
+          actions: [
+            if (!force)
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: const Text('لاحقاً')),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                showDialog(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (_) => UpdateProgressDialog(apkUrl: apkUrl));
+              },
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.primary,
+                  foregroundColor: Colors.white),
+              child: const Text('تحديث الآن'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _logout() async {
@@ -276,6 +338,74 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                     icon: Icon(Icons.access_time), label: 'ساعات العمل'),
               ],
             ),
+    );
+  }
+}
+
+// نافذة تقدّم التنزيل والتثبيت
+class UpdateProgressDialog extends StatefulWidget {
+  final String apkUrl;
+  const UpdateProgressDialog({super.key, required this.apkUrl});
+  @override
+  State<UpdateProgressDialog> createState() => _UpdateProgressDialogState();
+}
+
+class _UpdateProgressDialogState extends State<UpdateProgressDialog> {
+  String _status = 'جاري التنزيل...';
+  int _pct = 0;
+  bool _error = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _start();
+  }
+
+  void _start() {
+    try {
+      OtaUpdate()
+          .execute(widget.apkUrl, destinationFilename: 'phalix-driver.apk')
+          .listen((e) {
+        if (!mounted) return;
+        if (e.status == OtaStatus.DOWNLOADING) {
+          setState(() => _pct = int.tryParse(e.value ?? '0') ?? _pct);
+        } else if (e.status == OtaStatus.INSTALLING) {
+          setState(() => _status = 'جاري التثبيت...');
+        } else {
+          setState(() {
+            _error = true;
+            _status = 'تعذّر التحديث تلقائيًا — حمّل النسخة يدويًا';
+          });
+        }
+      });
+    } catch (_) {
+      setState(() {
+        _error = true;
+        _status = 'تعذّر التحديث';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('تحديث التطبيق'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (!_error)
+            LinearProgressIndicator(value: _pct > 0 ? _pct / 100 : null),
+          const SizedBox(height: 12),
+          Text(_error ? _status : '$_status $_pct%'),
+        ],
+      ),
+      actions: _error
+          ? [
+              TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('إغلاق')),
+            ]
+          : null,
     );
   }
 }

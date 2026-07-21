@@ -433,6 +433,18 @@ class Api {
     return {'ok': false, 'error': 'تعذّر الاتصال بالخادم'};
   }
 
+  // آخر نسخة منشورة للتطبيق (لرسالة التحديث)
+  static Future<Map<String, dynamic>?> getLatestVersion() async {
+    try {
+      final s = await _getList(
+          '$_rest/driver_app_version?id=eq.1&select=version_code,version_name,apk_url,force_update,notes',
+          Config.supabaseAnonKey);
+      return s.isEmpty ? null : s.first;
+    } catch (_) {
+      return null;
+    }
+  }
+
   // تسجيل تشخيصي (يذهب إلى driver_debug عبر driver-mark)
   static Future<void> debug(String event, Map<String, dynamic> data) async {
     try {

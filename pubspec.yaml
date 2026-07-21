@@ -1,7 +1,7 @@
 name: phalix_driver
 description: Phalix Driver - تطبيق سائق التوصيل
 publish_to: 'none'
-version: 2.0.0+23
+version: 2.0.0+24
 
 environment:
   sdk: '>=3.4.0 <4.0.0'
@@ -18,6 +18,7 @@ dependencies:
   http: ^1.2.2
   shared_preferences: ^2.3.2
   geolocator: ^13.0.1
+  ota_update: ^6.0.0
 
 dev_dependencies:
   flutter_lints: ^4.0.0

@@ -33,7 +33,7 @@ jobs:
           echo "=== تأكيد وجود ملف الصوت ==="
           ls -la android/app/src/main/res/raw/
           # أذونات الإشعارات + الخدمة الدائمة
-          sed -i 's#<application#<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>\n    <uses-permission android:name="android.permission.WAKE_LOCK"/>\n    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>\n    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>\n    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>\n    <uses-permission android:name="android.permission.VIBRATE"/>\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>\n    <application#' android/app/src/main/AndroidManifest.xml
+          sed -i 's#<application#<uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>\n    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"/>\n    <uses-permission android:name="android.permission.WAKE_LOCK"/>\n    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>\n    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT"/>\n    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>\n    <uses-permission android:name="android.permission.VIBRATE"/>\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>\n    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>\n    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES"/>\n    <application#' android/app/src/main/AndroidManifest.xml
           # تعريف خدمة الخلفية الدائمة
           sed -i 's#</application>#    <service android:name="com.pravera.flutter_foreground_task.service.ForegroundService" android:foregroundServiceType="dataSync" android:exported="false" android:stopWithTask="false"/>\n    </application>#' android/app/src/main/AndroidManifest.xml
           echo "=== المانيفست بعد التعديل ===" && cat android/app/src/main/AndroidManifest.xml
@@ -63,3 +63,20 @@ jobs:
           name: phalix-driver-apk
           path: build/app/outputs/flutter-apk/app-release.apk
           if-no-files-found: error
+
+      - name: Publish APK to Supabase (auto-update)
+        run: |
+          FUNC="https://rxtjoqulmgkkcohmgzgi.supabase.co/functions/v1/apk-publish"
+          SECRET="87bcac4b4da9317f3b8716e6af9269533f8e2228cc0db43b"
+          APK="build/app/outputs/flutter-apk/app-release.apk"
+          BUILD=$(grep '^version:' pubspec.yaml | sed 's/.*+//' | tr -d '[:space:]')
+          echo "Publishing build $BUILD"
+          # 1) رابط رفع موقّع
+          SIGN=$(curl -s -X POST "$FUNC" -H "Content-Type: application/json" -d "{\"secret\":\"$SECRET\",\"action\":\"sign\"}")
+          UURL=$(echo "$SIGN" | python3 -c "import sys,json;print(json.load(sys.stdin).get('full_url',''))")
+          if [ -z "$UURL" ]; then echo "sign failed: $SIGN"; exit 1; fi
+          # 2) رفع الـAPK
+          curl -s -X PUT "$UURL" -H "Content-Type: application/vnd.android.package-archive" --data-binary @"$APK" -o /dev/null -w "upload: %{http_code}\n"
+          # 3) نشر النسخة
+          curl -s -X POST "$FUNC" -H "Content-Type: application/json" -d "{\"secret\":\"$SECRET\",\"action\":\"publish\",\"version_code\":$BUILD,\"version_name\":\"poll-v$BUILD\"}"
+          echo ""
