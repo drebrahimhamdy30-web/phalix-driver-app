@@ -84,7 +84,8 @@ class TripsViewState extends State<TripsView> {
   int _lateAssigned = 10;
   int _latePicked = 30;
   bool _showStats = false;
-  bool _showRating = false;
+  bool _showOrderRating = false;
+  bool _showTripRating = false;
   List<Map<String, dynamic>> _reviewFlags = [];
 
   Timer? _tick;
@@ -115,7 +116,8 @@ class TripsViewState extends State<TripsView> {
     _lateAssigned = board['lateAssigned'] is int ? board['lateAssigned'] : 10;
     _latePicked = board['latePicked'] is int ? board['latePicked'] : 30;
     _showStats = board['showStats'] == true;
-    _showRating = board['showRating'] == true;
+    _showOrderRating = board['showOrderRating'] == true;
+    _showTripRating = board['showTripRating'] == true;
     final trips = (board['trips'] as List).cast<Map<String, dynamic>>();
     // تنبيهات الرحلة السابقة غير المقفولة على نظام الصيدلية (للرحلة الجارية)
     final activeTrip = trips
@@ -672,7 +674,8 @@ class TripsViewState extends State<TripsView> {
               padding: const EdgeInsets.only(top: 6),
               child: Wrap(children: [
                 ..._orderTimers(o),
-                if (_showRating && o['perf_rating'] != null) _ratingChip(o),
+                if (_showOrderRating && o['perf_rating'] != null)
+                  _ratingChip(o),
               ]),
             ),
           ),
@@ -884,7 +887,7 @@ class TripsViewState extends State<TripsView> {
         ],
       ),
     );
-    if (!_showRating || rated == 0) return box;
+    if (!_showTripRating || rated == 0) return box;
     final ratio = sumE > 0 ? sumA / sumE : 1;
     final tr = ratio <= 0.90 ? 'ممتاز' : (ratio >= 1.10 ? 'متأخر' : 'جيد');
     final tc = tr == 'ممتاز'

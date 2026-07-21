@@ -162,10 +162,11 @@ class Api {
     int lateAssigned = 10;
     int latePicked = 30;
     bool showStats = false;
-    bool showRating = false;
+    bool showOrderRating = false;
+    bool showTripRating = false;
     if (branchId != null && branchId.isNotEmpty) {
       final s = await _getList(
-          '$_rest/dispatch_settings?branch_id=eq.$branchId&select=driver_can_complete_trip,max_break_minutes,max_assigned_minutes,max_picked_minutes,driver_show_stats,driver_show_rating',
+          '$_rest/dispatch_settings?branch_id=eq.$branchId&select=driver_can_complete_trip,max_break_minutes,max_assigned_minutes,max_picked_minutes,driver_show_stats,driver_show_order_rating,driver_show_trip_rating',
           jwt);
       if (s.isNotEmpty) {
         canComplete = s.first['driver_can_complete_trip'] != false;
@@ -176,7 +177,8 @@ class Api {
         final mp = s.first['max_picked_minutes'];
         if (mp is num) latePicked = mp.toInt();
         showStats = s.first['driver_show_stats'] == true;
-        showRating = s.first['driver_show_rating'] == true;
+        showOrderRating = s.first['driver_show_order_rating'] == true;
+        showTripRating = s.first['driver_show_trip_rating'] == true;
       }
     }
 
@@ -188,7 +190,8 @@ class Api {
       'lateAssigned': lateAssigned,
       'latePicked': latePicked,
       'showStats': showStats,
-      'showRating': showRating,
+      'showOrderRating': showOrderRating,
+      'showTripRating': showTripRating,
     };
   }
 
