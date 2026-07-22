@@ -42,6 +42,8 @@ jobs:
           echo "=== المانيفست بعد التعديل ===" && cat android/app/src/main/AndroidManifest.xml
           # اسم التطبيق الظاهر
           sed -i 's#android:label="driver"#android:label="Phalix سائق"#' android/app/src/main/AndroidManifest.xml
+          # السماح بفتح روابط https في المتصفح (url_launcher على أندرويد 11+)
+          sed -i 's#<queries>#<queries>\n    <intent><action android:name="android.intent.action.VIEW"/><data android:scheme="https"/></intent>#' android/app/src/main/AndroidManifest.xml
           # رفع الحد الأدنى لإصدار أندرويد (مطلوب لـ Firebase)
           sed -i 's#minSdk = flutter.minSdkVersion#minSdk = 23#' android/app/build.gradle.kts || true
           sed -i 's#minSdkVersion flutter.minSdkVersion#minSdkVersion 23#' android/app/build.gradle || true

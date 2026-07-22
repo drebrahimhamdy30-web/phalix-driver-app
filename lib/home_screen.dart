@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ota_update/ota_update.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'api.dart';
 import 'config.dart';
 import 'login_screen.dart';
@@ -135,12 +136,19 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                   onPressed: () => Navigator.pop(ctx),
                   child: const Text('لاحقاً')),
             ElevatedButton(
-              onPressed: () {
+              onPressed: () async {
                 Navigator.pop(ctx);
-                showDialog(
-                    context: context,
-                    barrierDismissible: false,
-                    builder: (_) => UpdateProgressDialog(apkUrl: apkUrl));
+                // نفتح رابط النسخة في المتصفح — التنزيل والتثبيت عبر النظام (أضمن من التثبيت الجوّاني)
+                final ok = await launchUrl(Uri.parse(apkUrl),
+                    mode: LaunchMode.externalApplication);
+                if (!ok) {
+                  // احتياطي: التثبيت الجوّاني القديم
+                  if (!mounted) return;
+                  showDialog(
+                      context: context,
+                      barrierDismissible: false,
+                      builder: (_) => UpdateProgressDialog(apkUrl: apkUrl));
+                }
               },
               style: ElevatedButton.styleFrom(
                   backgroundColor: AppTheme.primary,
