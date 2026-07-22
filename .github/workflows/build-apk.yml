@@ -21,9 +21,10 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          # نثبّت نسخة Flutter على إصدار يستخدم AGP 8 / Gradle 8 (متوافق مع ota_update)
-          # عدم التثبيت يجعل stable يتقدّم إلى AGP 9 فيكسر البناء (jcenter محذوف)
-          flutter-version: '3.24.5'
+          # 3.29.x: أول سلسلة تستخدم Kotlin DSL (build.gradle.kts) لتطابق تعديلات الـ workflow،
+          # ولا تزال على AGP 8 / Gradle 8 (متوافقة مع ota_update 6.0.0). عدم التثبيت يقفز إلى
+          # AGP 9 (jcenter محذوف) فيكسر البناء.
+          flutter-version: '3.29.3'
 
       - name: Scaffold Android project
         run: |
