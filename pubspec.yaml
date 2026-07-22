@@ -18,7 +18,7 @@ dependencies:
   http: ^1.2.2
   shared_preferences: ^2.3.2
   geolocator: ^13.0.1
-  ota_update: ^6.0.0
+  ota_update: ^7.1.0
 
 dev_dependencies:
   flutter_lints: ^4.0.0
