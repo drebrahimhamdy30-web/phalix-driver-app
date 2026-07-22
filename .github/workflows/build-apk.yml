@@ -45,6 +45,11 @@ jobs:
           # رفع الحد الأدنى لإصدار أندرويد (مطلوب لـ Firebase)
           sed -i 's#minSdk = flutter.minSdkVersion#minSdk = 23#' android/app/build.gradle.kts || true
           sed -i 's#minSdkVersion flutter.minSdkVersion#minSdkVersion 23#' android/app/build.gradle || true
+          # رفع نسخة Kotlin لتتوافق مع الحزم الحديثة (device_info_plus وغيرها بُنيت بـ Kotlin 2.x)
+          sed -i -E 's#(id\("org.jetbrains.kotlin.android"\) version ")[^"]+#\12.2.0#' android/settings.gradle.kts || true
+          echo "=== settings.gradle.kts بعد رفع Kotlin ===" && cat android/settings.gradle.kts
+          # توحيد نسخة NDK المطلوبة من الإضافات (27 متوافق للخلف)
+          sed -i 's#ndkVersion = flutter.ndkVersion#ndkVersion = "27.0.12077973"#' android/app/build.gradle.kts || true
           # تفعيل core library desugaring (مطلوب لمكتبة الإشعارات)
           sed -i 's/compileOptions {/compileOptions {\n        isCoreLibraryDesugaringEnabled = true/' android/app/build.gradle.kts
           printf '\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")\n}\n' >> android/app/build.gradle.kts
