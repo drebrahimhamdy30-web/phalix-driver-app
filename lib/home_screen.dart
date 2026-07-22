@@ -81,17 +81,30 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   // فحص آخر نسخة وعرض رسالة تحديث لو فيه أحدث
-  Future<void> _checkUpdate() async {
+  void _snack(String m) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
+  }
+
+  Future<void> _checkUpdate({bool manual = false}) async {
     try {
       final v = await Api.getLatestVersion();
-      if (v == null || !mounted) return;
+      if (v == null || !mounted) {
+        if (manual) _snack('تعذّر التحقق من التحديثات، حاول تاني');
+        return;
+      }
       final latest = v['version_code'] is int
           ? v['version_code'] as int
           : int.tryParse('${v['version_code']}') ?? 0;
       final apkUrl = '${v['apk_url'] ?? ''}';
-      if (latest <= Config.appBuild || apkUrl.isEmpty) return;
+      if (latest <= Config.appBuild || apkUrl.isEmpty) {
+        if (manual) _snack('أنت على أحدث نسخة (v${Config.appBuild}) ✅');
+        return;
+      }
       _showUpdateDialog(apkUrl, v['force_update'] == true, '${v['notes'] ?? ''}');
-    } catch (_) {}
+    } catch (_) {
+      if (manual) _snack('تعذّر التحقق من التحديثات');
+    }
   }
 
   void _showUpdateDialog(String apkUrl, bool force, String notes) {
@@ -141,11 +154,21 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   }
 
   Future<void> _logout() async {
-    await stopAlarmService();
-    await FlutterForegroundTask.clearAllData();
-    await cancelAlarm();
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.clear();
+    // الأهم: مسح بيانات الدخول أولاً (حتى لو فشل تنظيف الخدمات)
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+    } catch (_) {}
+    // تنظيف الخدمات best-effort — لا يمنع الخروج لو رمى خطأ أو تأخّر
+    try {
+      await stopAlarmService().timeout(const Duration(seconds: 3));
+    } catch (_) {}
+    try {
+      await FlutterForegroundTask.clearAllData().timeout(const Duration(seconds: 3));
+    } catch (_) {}
+    try {
+      await cancelAlarm().timeout(const Duration(seconds: 3));
+    } catch (_) {}
     if (!mounted) return;
     Navigator.pushReplacement(
         context, MaterialPageRoute(builder: (_) => const LoginScreen()));
@@ -272,10 +295,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 onPressed: _refreshCurrent, icon: const Icon(Icons.refresh)),
           PopupMenuButton<String>(
             onSelected: (v) {
+              if (v == 'upd') _checkUpdate(manual: true);
               if (v == 'pw') _changePassword();
               if (v == 'out') _logout();
             },
             itemBuilder: (_) => const [
+              PopupMenuItem(value: 'upd', child: Text('🔄 التحقق من التحديثات')),
               PopupMenuItem(value: 'pw', child: Text('🔑 تغيير كلمة المرور')),
               PopupMenuItem(value: 'out', child: Text('🚪 تسجيل الخروج')),
             ],
