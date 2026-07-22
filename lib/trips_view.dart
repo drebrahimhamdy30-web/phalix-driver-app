@@ -1017,9 +1017,37 @@ class TripsViewState extends State<TripsView> {
     if (ok == true) {
       final amt = double.tryParse(amtCtrl.text.trim()) ?? 0;
       final note = noteCtrl.text.trim();
+      // موقع التسليم (لحساب زمن الطريق والأداء) — لا يمنع التسليم
+      Map<String, double>? dloc = await getCurrentLatLng();
+      // لو الموقع مش متاح: نبّه الطيار (تسليم بدون تقييم / تشغيل GPS وإعادة المحاولة)
+      while (dloc == null && mounted) {
+        final choice = await showDialog<String>(
+          context: context,
+          barrierDismissible: false,
+          builder: (ctx) => AlertDialog(
+            title: const Text('⚠️ الموقع غير متاح'),
+            content: const Text(
+                'الـGPS مقفول أو إذن الموقع غير مفعّل، ولن يتم احتساب تقييم لهذا الطلب.\n\nشغّل الـGPS وحاول تاني، أو سلّم الطلب بدون تقييم.'),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(ctx, 'deliver'),
+                  child: const Text('تسليم بدون تقييم')),
+              ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx, 'retry'),
+                  style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.primary,
+                      foregroundColor: Colors.white),
+                  child: const Text('شغّلت الـGPS — حاول تاني')),
+            ],
+          ),
+        );
+        if (choice == 'retry') {
+          dloc = await getCurrentLatLng();
+          continue;
+        }
+        break; // تسليم بدون تقييم
+      }
       await _run(() async {
-        // موقع التسليم (لحساب زمن الطريق والأداء) — لا يمنع التسليم
-        final dloc = await getCurrentLatLng();
         await Api.deliverOrder(
             id, pay, amt, note.isEmpty ? null : note, widget.jwt,
             lat: dloc?['lat'], lng: dloc?['lng']);
