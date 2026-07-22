@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 
-// ثيم التطبيق: فضي رمادي + أورانج
+// ثيم التطبيق: أزرق متناغم مع لوجو التطبيق (درجات الأزرق)
 class AppTheme {
-  static const Color primary = Color(0xFFF97316); // أورانج
-  static const Color appBar = Color(0xFF475569); // رمادي فضي
-  static const Color bg = Color(0xFFF8FAFC); // فضي فاتح
+  static const Color primary = Color(0xFF1E88E5); // أزرق اللوجو الفاتح (أزرار/تمييز)
+  static const Color appBar = Color(0xFF0A3D62); // كحلي غامق (شريط العنوان)
+  static const Color bg = Color(0xFFF5F9FF); // أزرق فاتح جداً (خلفية)
   static const Color onAppBar = Colors.white;
 }
 
@@ -31,9 +31,9 @@ class Config {
   static const String appSecret =
       '87bcac4b4da9317f3b8716e6af9269533f8e2228cc0db43b';
   // رقم إصدار داخلي للتشخيص
-  static const String appVersion = 'poll-v28';
+  static const String appVersion = 'poll-v29';
   // رقم البناء (يُقارن بآخر نسخة منشورة لعرض رسالة التحديث)
-  static const int appBuild = 28;
+  static const int appBuild = 29;
   // كل كام ثانية تسحب الخدمة الطلبات الجديدة
   static const int pollIntervalMs = 10000;
 
