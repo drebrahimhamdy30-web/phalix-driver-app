@@ -180,6 +180,10 @@ class TripsViewState extends State<TripsView> {
         if (mounted) await _showLocationRequired();
       } else {
         if (!res.ok && mounted) await _showViolation(res);
+        final ord = _findOrder(id);
+        if (ord != null && _hasBalance(ord) && mounted) {
+          await _showBalanceNotice([ord]);
+        }
         await Api.pickupOrder(id, widget.jwt);
         await Api.logOrder(id, 'order_picked', _buildPickupLog(res),
             widget.driverId, widget.driverName, widget.jwt);
@@ -215,6 +219,12 @@ class TripsViewState extends State<TripsView> {
         if (mounted) await _showLocationRequired();
       } else {
         if (!res.ok && mounted) await _showViolation(res);
+        final withBal = ids
+            .map(_findOrder)
+            .whereType<Map<String, dynamic>>()
+            .where(_hasBalance)
+            .toList();
+        if (withBal.isNotEmpty && mounted) await _showBalanceNotice(withBal);
         await Api.pickupAll(ids, widget.jwt);
         final log = _buildPickupLog(res, bulk: true);
         for (final id in ids) {
@@ -256,6 +266,85 @@ class TripsViewState extends State<TripsView> {
           TextButton(
               onPressed: () => Navigator.pop(ctx),
               child: const Text('حسناً')),
+        ],
+      ),
+    );
+  }
+
+  // يدوّر على بيانات الطلب بالـid جوه طلبات الرحلات المحمّلة
+  Map<String, dynamic>? _findOrder(String id) {
+    for (final list in _tripOrders.values) {
+      for (final o in list) {
+        if ('${o['id']}' == id) return o;
+      }
+    }
+    return null;
+  }
+
+  num _balOf(Map<String, dynamic> o) =>
+      num.tryParse('${o['current_customer_balance'] ?? 0}') ?? 0;
+  // يظهر التنبيه لو |الرصيد| ≥ 3ج (مستحق أو رصيد للعميل)
+  bool _hasBalance(Map<String, dynamic> o) => _balOf(o).abs() >= 3;
+  String _fmtBal(num n) {
+    final v = n.abs();
+    return v == v.roundToDouble()
+        ? v.toStringAsFixed(0)
+        : v.toStringAsFixed(2);
+  }
+
+  // تنبيه الرصيد السابق وقت الاستلام — يطلب الرجوع للصيدلية لإضافته على الريسيت
+  Future<void> _showBalanceNotice(List<Map<String, dynamic>> withBal) async {
+    if (withBal.isEmpty) return;
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('⚠️ رصيد سابق على العميل'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+                'برجاء الرجوع للصيدلية لإضافة رصيد العميل على ريسيت الطلب الحالي.',
+                style: TextStyle(height: 1.5, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 10),
+            ...withBal.map((o) {
+              final b = _balOf(o);
+              final owes = b > 0;
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                child: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: owes ? const Color(0xFFFEE2E2) : const Color(0xFFE0F2FE),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Expanded(
+                          child: Text(
+                              '${o['customer_name'] ?? o['cust_name'] ?? '—'}',
+                              style: const TextStyle(fontWeight: FontWeight.w700))),
+                      const SizedBox(width: 8),
+                      Text(
+                          owes
+                              ? '${_fmtBal(b)} ج مستحق'
+                              : '${_fmtBal(b)} ج للعميل',
+                          style: TextStyle(
+                              color: owes
+                                  ? const Color(0xFFB91C1C)
+                                  : const Color(0xFF0E7490),
+                              fontWeight: FontWeight.w800)),
+                    ],
+                  ),
+                ),
+              );
+            }),
+          ],
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx), child: const Text('فهمت')),
         ],
       ),
     );
