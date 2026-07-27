@@ -106,9 +106,9 @@ class TripsViewState extends State<TripsView> {
     super.dispose();
   }
 
-  Future<void> load() async {
+  Future<void> load({bool background = false}) async {
     if (!mounted) return;
-    setState(() => _loading = true);
+    if (!background) setState(() => _loading = true);
     final board =
         await Api.loadBoard(widget.driverId, widget.branchId, widget.jwt);
     _locSettings ??=
@@ -162,7 +162,7 @@ class TripsViewState extends State<TripsView> {
     try {
       await action();
     } catch (_) {}
-    await load();
+    await load(background: true);
     if (mounted) setState(() => _busy = false);
   }
 
@@ -185,11 +185,11 @@ class TripsViewState extends State<TripsView> {
           await _showBalanceNotice([ord]);
         }
         await Api.pickupOrder(id, widget.jwt);
-        await Api.logOrder(id, 'order_picked', _buildPickupLog(res),
-            widget.driverId, widget.driverName, widget.jwt);
+        unawaited(Api.logOrder(id, 'order_picked', _buildPickupLog(res),
+            widget.driverId, widget.driverName, widget.jwt));
       }
     } catch (_) {}
-    await load();
+    await load(background: true);
     if (mounted) setState(() => _busy = false);
   }
 
@@ -228,12 +228,12 @@ class TripsViewState extends State<TripsView> {
         await Api.pickupAll(ids, widget.jwt);
         final log = _buildPickupLog(res, bulk: true);
         for (final id in ids) {
-          await Api.logOrder(id, 'order_picked', log, widget.driverId,
-              widget.driverName, widget.jwt);
+          unawaited(Api.logOrder(id, 'order_picked', log, widget.driverId,
+              widget.driverName, widget.jwt));
         }
       }
     } catch (_) {}
-    await load();
+    await load(background: true);
     if (mounted) setState(() => _busy = false);
   }
 
@@ -876,8 +876,8 @@ class TripsViewState extends State<TripsView> {
       btns.add(_smallBtn('🔄 حاول تاني', const Color(0xFF16a34a),
           () => _run(() async {
                 await Api.retryOrder(id, widget.jwt);
-                await Api.logOrder(id, 'order_picked', {'retry': true},
-                    widget.driverId, widget.driverName, widget.jwt);
+                unawaited(Api.logOrder(id, 'order_picked', {'retry': true},
+                    widget.driverId, widget.driverName, widget.jwt));
               })));
     }
     if (btns.isEmpty) return const SizedBox.shrink();
@@ -1140,7 +1140,7 @@ class TripsViewState extends State<TripsView> {
         await Api.deliverOrder(
             id, pay, amt, note.isEmpty ? null : note, widget.jwt,
             lat: dloc?['lat'], lng: dloc?['lng']);
-        await Api.logOrder(
+        unawaited(Api.logOrder(
             id,
             'order_delivered',
             {
@@ -1151,7 +1151,7 @@ class TripsViewState extends State<TripsView> {
             },
             widget.driverId,
             widget.driverName,
-            widget.jwt);
+            widget.jwt));
       });
     }
   }
@@ -1204,9 +1204,9 @@ class TripsViewState extends State<TripsView> {
       await _run(() async {
         await Api.failOrder(
             id, reason!, note.isEmpty ? null : note, attempt, widget.jwt);
-        await Api.logOrder(id, 'order_postponed',
+        unawaited(Api.logOrder(id, 'order_postponed',
             {'reason': reason, 'kept_in_trip': true},
-            widget.driverId, widget.driverName, widget.jwt);
+            widget.driverId, widget.driverName, widget.jwt));
       });
     }
   }
@@ -1264,9 +1264,9 @@ class TripsViewState extends State<TripsView> {
           }
         }
         for (final oid in failed) {
-          await Api.logOrder(oid, 'order_postponed',
+          unawaited(Api.logOrder(oid, 'order_postponed',
               {'released_on_trip_complete': true},
-              widget.driverId, widget.driverName, widget.jwt);
+              widget.driverId, widget.driverName, widget.jwt));
         }
       }
       await Api.completeDelivered(delivered, widget.jwt);

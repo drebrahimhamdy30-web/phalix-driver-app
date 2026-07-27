@@ -182,88 +182,73 @@ class AttendanceBarState extends State<AttendanceBar> {
     if (isPending) {
       bg = const Color(0xFFfef9c3);
       dot = const Color(0xFFca8a04);
-      const labels = {
-        'online_request': 'طلب الحضور قيد الموافقة',
-        'break_request': 'طلب الاستراحة قيد الموافقة',
-        'offline_request': 'طلب الانصراف قيد الموافقة',
-      };
-      label = labels[st] ?? 'قيد الموافقة';
+      label = 'بانتظار موافقة الإدارة';
     } else if (st == 'online') {
       bg = const Color(0xFFdcfce7);
       dot = const Color(0xFF16a34a);
-      label = 'أنت حاضر — جاهز للعمل';
+      label = 'حاضر — جاهز للعمل';
       actions = [
-        _btn('☕ استراحة', const Color(0xFFca8a04), () => _request('break')),
-        _btn('🔴 انصراف', const Color(0xFFdc2626), () => _request('offline')),
+        _squareBtn(Icons.free_breakfast, const Color(0xFFca8a04), 'استراحة',
+            () => _request('break')),
+        _squareBtn(Icons.logout, const Color(0xFFdc2626), 'انصراف',
+            () => _request('offline')),
       ];
     } else if (st == 'break') {
       bg = const Color(0xFFfef9c3);
       dot = const Color(0xFFca8a04);
       label = 'في استراحة';
       actions = [
-        _btn('▶️ إنهاء الاستراحة', const Color(0xFF16a34a), _endBreakManual),
+        _squareBtn(Icons.play_arrow, const Color(0xFF16a34a),
+            'إنهاء الاستراحة', _endBreakManual),
       ];
     } else {
       bg = const Color(0xFFf1f5f9);
       dot = const Color(0xFF94a3b8);
-      label = 'غير حاضر — اطلب الحضور للبدء';
+      label = 'غير حاضر — اطلب الحضور';
       actions = [
-        _btn('🟢 طلب الحضور', const Color(0xFF16a34a), () => _request('online')),
+        _squareBtn(Icons.login, const Color(0xFF16a34a), 'طلب الحضور',
+            () => _request('online')),
       ];
     }
 
+    // كله في سطر واحد مرتّب: الحالة يمين — والأزرار المربعة والدور شمال
     return Container(
       width: double.infinity,
       color: bg,
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      padding: const EdgeInsets.fromLTRB(12, 7, 12, 7),
+      child: Row(
         children: [
-          Row(
-            children: [
-              Container(
-                width: 12,
-                height: 12,
-                decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(label,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.bold, fontSize: 13)),
-              ),
-              if (_timerText.isNotEmpty)
-                Text(_timerText,
-                    style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 14,
-                        color: st == 'break'
-                            ? const Color(0xFFb45309)
-                            : const Color(0xFF15803d))),
-              if (_busy)
-                const Padding(
-                  padding: EdgeInsets.only(right: 8),
-                  child: SizedBox(
-                      width: 14,
-                      height: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2)),
-                ),
-            ],
+          Container(
+            width: 11,
+            height: 11,
+            decoration: BoxDecoration(color: dot, shape: BoxShape.circle),
           ),
-          if (actions.isNotEmpty || _rank != null) ...[
-            const SizedBox(height: 6),
-            Row(
-              children: [
-                for (int i = 0; i < actions.length; i++) ...[
-                  if (i > 0) const SizedBox(width: 6),
-                  Expanded(child: actions[i]),
-                ],
-                if (_rank != null) ...[
-                  if (actions.isNotEmpty) const SizedBox(width: 8),
-                  _rankChip(),
-                ],
-              ],
-            ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                    fontWeight: FontWeight.bold, fontSize: 13)),
+          ),
+          if (_timerText.isNotEmpty) ...[
+            const SizedBox(width: 6),
+            Text(_timerText,
+                style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                    color: st == 'break'
+                        ? const Color(0xFFb45309)
+                        : const Color(0xFF15803d))),
+          ],
+          for (final a in actions) ...[const SizedBox(width: 6), a],
+          if (_rank != null) ...[const SizedBox(width: 6), _rankChip()],
+          if (_busy) ...[
+            const SizedBox(width: 8),
+            const SizedBox(
+                width: 14,
+                height: 14,
+                child: CircularProgressIndicator(strokeWidth: 2)),
           ],
         ],
       ),
@@ -294,18 +279,25 @@ class AttendanceBarState extends State<AttendanceBar> {
     );
   }
 
-  Widget _btn(String text, Color color, VoidCallback onTap) {
-    return SizedBox(
-      height: 32,
-      child: ElevatedButton(
-        onPressed: _busy ? null : onTap,
-        style: ElevatedButton.styleFrom(
-            backgroundColor: color,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-        child: Text(text,
-            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
+  // زر مربّع صغير بأيقونة (مع tooltip للاسم) — يقعد جنب الدور في نفس السطر
+  Widget _squareBtn(
+      IconData icon, Color color, String tip, VoidCallback onTap) {
+    return Tooltip(
+      message: tip,
+      child: SizedBox(
+        width: 38,
+        height: 38,
+        child: ElevatedButton(
+          onPressed: _busy ? null : onTap,
+          style: ElevatedButton.styleFrom(
+              backgroundColor: color,
+              foregroundColor: Colors.white,
+              padding: EdgeInsets.zero,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(9)),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap),
+          child: Icon(icon, size: 19),
+        ),
       ),
     );
   }
