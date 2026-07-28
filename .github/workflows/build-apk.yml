@@ -85,8 +85,11 @@ jobs:
           SIGN=$(curl -s -X POST "$FUNC" -H "Content-Type: application/json" -d "{\"secret\":\"$SECRET\",\"action\":\"sign\"}")
           UURL=$(echo "$SIGN" | python3 -c "import sys,json;print(json.load(sys.stdin).get('full_url',''))")
           if [ -z "$UURL" ]; then echo "sign failed: $SIGN"; exit 1; fi
-          # 2) رفع الـAPK
-          curl -s -X PUT "$UURL" -H "Content-Type: application/vnd.android.package-archive" --data-binary @"$APK" -o /dev/null -w "upload: %{http_code}\n"
-          # 3) نشر النسخة
+          echo "APK size: $(du -h "$APK" | cut -f1)"
+          # 2) رفع الـAPK — لازم ينجح قبل النشر، وإلا نفشل الـ job (نتجنب نشر نسخة بدون ملف)
+          UP=$(curl -s -X PUT "$UURL" -H "Content-Type: application/vnd.android.package-archive" --data-binary @"$APK" -o /tmp/up_resp.txt -w "%{http_code}")
+          echo "upload status: $UP"; cat /tmp/up_resp.txt 2>/dev/null; echo ""
+          if [ "$UP" != "200" ]; then echo "❌ APK upload failed ($UP) — لن يتم نشر النسخة"; exit 1; fi
+          # 3) نشر النسخة (بعد التأكد إن الملف اترفع)
           curl -s -X POST "$FUNC" -H "Content-Type: application/json" -d "{\"secret\":\"$SECRET\",\"action\":\"publish\",\"version_code\":$BUILD,\"version_name\":\"poll-v$BUILD\"}"
           echo ""
