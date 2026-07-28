@@ -109,10 +109,14 @@ class TripsViewState extends State<TripsView> {
   Future<void> load({bool background = false}) async {
     if (!mounted) return;
     if (!background) setState(() => _loading = true);
-    final board =
-        await Api.loadBoard(widget.driverId, widget.branchId, widget.jwt);
-    _locSettings ??=
-        await Api.getLocationSettings(widget.branchId, widget.jwt);
+    // اللوحة وإعدادات الموقع مستقلين → بالتوازي بدل بالتسلسل (تحميل أسرع)
+    final boardFut =
+        Api.loadBoard(widget.driverId, widget.branchId, widget.jwt);
+    final locFut = _locSettings == null
+        ? Api.getLocationSettings(widget.branchId, widget.jwt)
+        : null;
+    final board = await boardFut;
+    if (locFut != null) _locSettings = await locFut;
     _lateAssigned = board['lateAssigned'] is int ? board['lateAssigned'] : 10;
     _latePicked = board['latePicked'] is int ? board['latePicked'] : 30;
     _showStats = board['showStats'] == true;

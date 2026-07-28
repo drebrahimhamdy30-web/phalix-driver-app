@@ -101,6 +101,12 @@ class Api {
   // تحميل لوحة الطيار: الرحلة الجارية + آخر 3 رحلات + طلباتها (مُحسّن: نداءات أقل)
   static Future<Map<String, dynamic>> loadBoard(
       String driverId, String? branchId, String jwt) async {
+    // إعدادات الفرع مستقلة عن الرحلات → نجيبها بالتوازي لتوفير لفة شبكة
+    final settingsFut = (branchId != null && branchId.isNotEmpty)
+        ? _getList(
+            '$_rest/dispatch_settings?branch_id=eq.$branchId&select=driver_can_complete_trip,max_break_minutes,max_assigned_minutes,max_picked_minutes,driver_show_stats,driver_show_order_rating,driver_show_trip_rating',
+            jwt)
+        : Future<List<Map<String, dynamic>>>.value(<Map<String, dynamic>>[]);
     final trips = await _getList(
         '$_rest/trips?driver_id=eq.$driverId&status=in.(active,pending_complete,completed)&order=created_at.desc&limit=10&select=*',
         jwt);
@@ -164,22 +170,18 @@ class Api {
     bool showStats = false;
     bool showOrderRating = false;
     bool showTripRating = false;
-    if (branchId != null && branchId.isNotEmpty) {
-      final s = await _getList(
-          '$_rest/dispatch_settings?branch_id=eq.$branchId&select=driver_can_complete_trip,max_break_minutes,max_assigned_minutes,max_picked_minutes,driver_show_stats,driver_show_order_rating,driver_show_trip_rating',
-          jwt);
-      if (s.isNotEmpty) {
-        canComplete = s.first['driver_can_complete_trip'] != false;
-        final mb = s.first['max_break_minutes'];
-        if (mb is num) maxBreak = mb.toInt();
-        final ma = s.first['max_assigned_minutes'];
-        if (ma is num) lateAssigned = ma.toInt();
-        final mp = s.first['max_picked_minutes'];
-        if (mp is num) latePicked = mp.toInt();
-        showStats = s.first['driver_show_stats'] == true;
-        showOrderRating = s.first['driver_show_order_rating'] == true;
-        showTripRating = s.first['driver_show_trip_rating'] == true;
-      }
+    final s = await settingsFut;
+    if (s.isNotEmpty) {
+      canComplete = s.first['driver_can_complete_trip'] != false;
+      final mb = s.first['max_break_minutes'];
+      if (mb is num) maxBreak = mb.toInt();
+      final ma = s.first['max_assigned_minutes'];
+      if (ma is num) lateAssigned = ma.toInt();
+      final mp = s.first['max_picked_minutes'];
+      if (mp is num) latePicked = mp.toInt();
+      showStats = s.first['driver_show_stats'] == true;
+      showOrderRating = s.first['driver_show_order_rating'] == true;
+      showTripRating = s.first['driver_show_trip_rating'] == true;
     }
 
     return {
