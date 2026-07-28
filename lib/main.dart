@@ -9,6 +9,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:vibration/vibration.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'config.dart';
 import 'firebase_options.dart';
 import 'login_screen.dart';
@@ -297,6 +298,14 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   FlutterForegroundTask.initCommunicationPort();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  // تهيئة Supabase (Realtime) — عشان التطبيق يرد على طلب "موقع الطيار الحالي" من الإدارة
+  try {
+    await Supabase.initialize(
+      url: Config.supabaseUrl,
+      anonKey: Config.supabaseAnonKey,
+    );
+  } catch (_) {}
 
   await initNotifications();
   _initForegroundTask();

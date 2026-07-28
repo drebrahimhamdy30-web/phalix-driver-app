@@ -9,6 +9,7 @@ import 'login_screen.dart';
 import 'trips_view.dart';
 import 'hours_view.dart';
 import 'attendance_view.dart';
+import 'location_responder.dart';
 import 'main.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -29,6 +30,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   final GlobalKey<TripsViewState> _prevKey = GlobalKey<TripsViewState>();
   final GlobalKey<AttendanceBarState> _attKey =
       GlobalKey<AttendanceBarState>();
+  final LocationResponder _locResponder = LocationResponder();
 
   @override
   void initState() {
@@ -40,6 +42,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _locResponder.stop();
     super.dispose();
   }
 
@@ -66,6 +69,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _branchId = prefs.getString('branch_id') ?? '';
     _jwt = prefs.getString('jwt') ?? '';
     if (mounted) setState(() => _ready = true);
+    // اشترك في قناة الموقع عشان ترد على طلب "موقع الطيار الحالي" من الإدارة
+    try {
+      if (_driverId.isNotEmpty) _locResponder.start(_driverId);
+    } catch (_) {}
     try {
       FlutterForegroundTask.sendDataToTask('stop_alarm');
       await stopAlarmSound();
