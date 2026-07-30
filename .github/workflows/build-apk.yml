@@ -64,6 +64,16 @@ jobs:
       - name: Get dependencies
         run: flutter pub get
 
+      - name: Sync app version from pubspec
+        # يضمن أن Config.appBuild/appVersion دايمًا = رقم البناء في pubspec (= version_code المنشور)
+        # عشان مايحصلش لوب تحديث لو الرقم الثابت اتنسى يتزوّد
+        run: |
+          BUILD=$(grep '^version:' pubspec.yaml | sed 's/.*+//' | tr -d '[:space:]')
+          echo "Syncing Config.appBuild/appVersion to $BUILD"
+          sed -i -E "s/appBuild = [0-9]+;/appBuild = ${BUILD};/" lib/config.dart
+          sed -i -E "s/appVersion = 'poll-v[0-9]+';/appVersion = 'poll-v${BUILD}';/" lib/config.dart
+          grep -E "appVersion|appBuild" lib/config.dart
+
       - name: Build APK
         # arm64 فقط: يقلّل حجم الـ APK بشكل كبير (يتجنّب تخطّي حد الرفع في التخزين)
         # ويعمل على كل الموبايلات الحديثة عمليًا
