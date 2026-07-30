@@ -56,19 +56,29 @@ class AttendanceBarState extends State<AttendanceBar> {
 
   // تُستدعى من الشاشة الأم عند الرجوع للتطبيق أو التحديث
   Future<void> refresh() async {
+    // الحالة (حاضر/استراحة/بانتظار) خفيفة → نجيبها ونعرضها فورًا
     final rec = await Api.getLatestAttendance(widget.driverId, widget.jwt);
-    Map<String, dynamic>? rank;
-    try {
-      rank = await Api.getRank(widget.driverId, widget.branchId, widget.jwt);
-    } catch (_) {}
     if (!mounted) return;
     setState(() {
       _rec = rec;
-      _rank = rank?['rank'] is int ? rank!['rank'] as int : null;
-      _rankTotal = rank?['total'] is int ? rank!['total'] as int : 0;
       _loading = false;
     });
     _setupTimer();
+    // الدور/الترتيب ثقيل (٤-٥ نداءات) وثانوي → بالخلفية من غير ما يأخّر ظهور الحالة
+    _refreshRank();
+  }
+
+  // جلب دور الطيار في الخلفية (لا يمنع عرض حالة الحضور)
+  Future<void> _refreshRank() async {
+    try {
+      final rank =
+          await Api.getRank(widget.driverId, widget.branchId, widget.jwt);
+      if (!mounted) return;
+      setState(() {
+        _rank = rank?['rank'] is int ? rank!['rank'] as int : null;
+        _rankTotal = rank?['total'] is int ? rank!['total'] as int : 0;
+      });
+    } catch (_) {}
   }
 
   String _status() => '${_rec?['status'] ?? 'offline'}';
@@ -162,8 +172,26 @@ class AttendanceBarState extends State<AttendanceBar> {
           return;
         }
       }
-      await Api.requestAttendance(
+      final ok = await Api.requestAttendance(
           widget.driverId, type, _requireApproval, widget.jwt);
+      if (ok && mounted) {
+        // تفاؤلي: اعرض الحالة الجديدة فورًا (بانتظار موافقة/حاضر) من غير ما
+        // نستنى التحديث الكامل — والمزامنة تصحّح أي فرق بالخلفية
+        final nowIso = DateTime.now().toUtc().toIso8601String();
+        final optimStatus = _requireApproval ? '${type}_request' : type;
+        setState(() {
+          _rec = {
+            ...?_rec,
+            'status': optimStatus,
+            'requested_at': nowIso,
+            if (!_requireApproval) 'approved_at': nowIso,
+          };
+          _busy = false;
+        });
+        _setupTimer();
+        refresh(); // مزامنة خلفية (من غير await)
+        return;
+      }
     } catch (_) {}
     await refresh();
     if (mounted) setState(() => _busy = false);

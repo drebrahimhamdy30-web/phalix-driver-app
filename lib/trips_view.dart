@@ -127,23 +127,28 @@ class TripsViewState extends State<TripsView> {
     final activeTrip = trips
         .where((t) => ['active', 'pending_complete'].contains(t['status']))
         .toList();
-    List<Map<String, dynamic>> flags = [];
-    if (activeTrip.isNotEmpty) {
-      flags = await Api.getReviewFlags('${activeTrip.first['id']}', widget.jwt);
-    }
     if (!mounted) return;
     setState(() {
       _trips = trips;
       _tripOrders = (board['tripOrders'] as Map).map((k, v) =>
           MapEntry('$k', (v as List).cast<Map<String, dynamic>>()));
       _canComplete = board['canComplete'] == true;
-      _reviewFlags = flags;
       final vis = _visibleTrips;
       if (_selected == null || !vis.any((t) => '${t['id']}' == _selected)) {
         _selected = vis.isNotEmpty ? '${vis.first['id']}' : null;
       }
       _loading = false;
     });
+    // تنبيهات الرحلة السابقة على نظام الصيدلية (RPC) ثانوية → بالخلفية
+    // عشان اللوحة تظهر فورًا من غير ما تستنى النداء ده
+    if (activeTrip.isNotEmpty) {
+      final flags =
+          await Api.getReviewFlags('${activeTrip.first['id']}', widget.jwt);
+      if (!mounted) return;
+      setState(() => _reviewFlags = flags);
+    } else if (mounted) {
+      setState(() => _reviewFlags = []);
+    }
   }
 
   // الرحلات الظاهرة حسب الوضع: الجارية فقط أو المكتملة (آخر 3)

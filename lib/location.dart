@@ -45,21 +45,39 @@ Future<Map<String, double>?> _getMyLocation() async {
         perm == LocationPermission.deniedForever) {
       return null;
     }
-    // محاولة 1: دقة عالية
+    // مسار سريع (شبه فوري): آخر موقع معروف لو حديث ودقته كويسة —
+    // الطيار عند الصيدلية فمعقول نستخدمه بدل ما نستنى قفلة GPS جديدة
+    try {
+      final last = await Geolocator.getLastKnownPosition();
+      final ts = last?.timestamp;
+      if (last != null &&
+          last.accuracy > 0 &&
+          last.accuracy <= 80 &&
+          ts != null &&
+          DateTime.now().difference(ts).inSeconds <= 45) {
+        return {
+          'lat': last.latitude,
+          'lng': last.longitude,
+          'acc': last.accuracy
+        };
+      }
+    } catch (_) {}
+    // محاولة: دقة متوسطة (أسرع بكتير من العالية — بتستخدم الشبكة/الواي فاي،
+    // وكافية لفحص نطاق ~50م) بمهلة أقصر
     try {
       final pos = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          timeLimit: Duration(seconds: 15),
+          accuracy: LocationAccuracy.medium,
+          timeLimit: Duration(seconds: 8),
         ),
       );
       return {'lat': pos.latitude, 'lng': pos.longitude, 'acc': pos.accuracy};
     } catch (_) {
-      // محاولة 2: دقة عادية أسرع
+      // احتياطي أخير: دقة منخفضة أسرع
       final pos = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.medium,
-          timeLimit: Duration(seconds: 10),
+          accuracy: LocationAccuracy.low,
+          timeLimit: Duration(seconds: 6),
         ),
       );
       return {'lat': pos.latitude, 'lng': pos.longitude, 'acc': pos.accuracy};
