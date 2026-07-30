@@ -179,11 +179,10 @@ class TripsViewState extends State<TripsView> {
           await Api.getLocationSettings(widget.branchId, widget.jwt);
       final res = await checkPickupLocation(_locSettings);
       _reportLocCheck(res);
-      if (res.noLoc) {
-        // الموقع مش متاح → امنع الاستلام لحد ما يشغّل الـGPS
-        if (mounted) await _showLocationRequired();
+      if (!res.ok) {
+        // بره النطاق أو الموقع غير متاح → امنع الاستلام تمامًا
+        if (mounted) await showLocBlockDialog(context, res, 'تستلم الطلب');
       } else {
-        if (!res.ok && mounted) await _showViolation(res);
         final ord = _findOrder(id);
         if (ord != null && _hasBalance(ord) && mounted) {
           await _showBalanceNotice([ord]);
@@ -218,11 +217,10 @@ class TripsViewState extends State<TripsView> {
           await Api.getLocationSettings(widget.branchId, widget.jwt);
       final res = await checkPickupLocation(_locSettings);
       _reportLocCheck(res);
-      if (res.noLoc) {
-        // الموقع مش متاح → امنع الاستلام لحد ما يشغّل الـGPS
-        if (mounted) await _showLocationRequired();
+      if (!res.ok) {
+        // بره النطاق أو الموقع غير متاح → امنع الاستلام تمامًا
+        if (mounted) await showLocBlockDialog(context, res, 'تستلم الطلبات');
       } else {
-        if (!res.ok && mounted) await _showViolation(res);
         final withBal = ids
             .map(_findOrder)
             .whereType<Map<String, dynamic>>()
@@ -257,23 +255,6 @@ class TripsViewState extends State<TripsView> {
     return m;
   }
 
-  // يمنع الاستلام لو الـGPS/الموقع مش متاح
-  Future<void> _showLocationRequired() async {
-    await showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('📍 الموقع غير مفعّل'),
-        content: const Text(
-            'مش قادر أحدّد موقعك، فمش هينفع تستلم الطلب دلوقتي.\n\nشغّل الـGPS (خدمة الموقع) من الموبايل واسمح للتطبيق بالوصول للموقع، وبعدين حاول تستلم تاني.',
-            style: TextStyle(height: 1.5)),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('حسناً')),
-        ],
-      ),
-    );
-  }
 
   // يدوّر على بيانات الطلب بالـid جوه طلبات الرحلات المحمّلة
   Map<String, dynamic>? _findOrder(String id) {
@@ -349,24 +330,6 @@ class TripsViewState extends State<TripsView> {
         actions: [
           TextButton(
               onPressed: () => Navigator.pop(ctx), child: const Text('فهمت')),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _showViolation(LocResult res) async {
-    final msg = res.noLoc
-        ? 'تعذّر تحديد موقعك.\n\nتم استلام الطلب وتسجيل ملاحظة للمراجعة.\n\nللحل: فعّل الـ GPS من الموبايل واسمح للتطبيق بالوصول للموقع.'
-        : 'استلام خارج حدود الفرع.\n\nأنت على بُعد ${res.distance} متر من الصيدلية.\nتم استلام الطلب وتحويله للمراجعة من الإدارة.';
-    await showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('⚠️ تنبيه موقع الاستلام'),
-        content: Text(msg, style: const TextStyle(height: 1.5)),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('حسناً')),
         ],
       ),
     );
@@ -1222,6 +1185,14 @@ class TripsViewState extends State<TripsView> {
         orders.where((o) => ['assigned', 'picked'].contains(o['status'])).length;
     if (blocking > 0) {
       _snack('لا يمكن إنهاء الرحلة — يوجد $blocking طلب لم يُوصّل أو يُسجّل تعذّره');
+      return;
+    }
+    // فحص الموقع — لازم يكون داخل نطاق الصيدلية عشان ينهي الرحلة
+    _locSettings ??= await Api.getLocationSettings(widget.branchId, widget.jwt);
+    final locRes = await checkPickupLocation(_locSettings);
+    _reportLocCheck(locRes);
+    if (!locRes.ok) {
+      if (mounted) await showLocBlockDialog(context, locRes, 'تنهي الرحلة');
       return;
     }
     // إذا كان الإنهاء يحتاج موافقة الإدارة

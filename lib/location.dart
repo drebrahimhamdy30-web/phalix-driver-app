@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 
 // نتيجة فحص موقع الاستلام
@@ -103,4 +104,34 @@ Future<LocResult> checkPickupLocation(Map<String, dynamic>? settings) async {
   }
   return LocResult(
       ok: true, distance: dist, lat: loc['lat'], lng: loc['lng'], acc: loc['acc']);
+}
+
+// رسالة منع موحّدة تظهر لما الطيار بره نطاق الصيدلية أو الموقع غير متاح
+// action مثال: "تستلم الطلب" / "تنهي الرحلة" / "تطلب الحضور"
+Future<void> showLocBlockDialog(
+    BuildContext context, LocResult res, String action) async {
+  if (!context.mounted) return;
+  final msg = res.noLoc
+      ? 'مش قادر أحدّد موقعك، فمش هينفع $action دلوقتي.\n\nشغّل الـGPS (خدمة الموقع) واسمح للتطبيق بالوصول للموقع، وبعدين حاول تاني.'
+      : 'لازم تكون داخل نطاق الصيدلية عشان $action.\n\nإنت على بُعد ${res.distance} متر من الصيدلية.';
+  await showDialog(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(res.noLoc ? '📍 الموقع غير مفعّل' : '📍 خارج نطاق الصيدلية'),
+      content: Text(msg, style: const TextStyle(height: 1.5)),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.pop(ctx), child: const Text('حسناً')),
+      ],
+    ),
+  );
+}
+
+// بوابة موقع: تجيب الإعدادات وتفحص، وتظهر رسالة منع لو ممنوع. ترجّع true لو مسموح.
+Future<bool> gateAtPharmacy(BuildContext context,
+    Map<String, dynamic>? settings, String action) async {
+  final res = await checkPickupLocation(settings);
+  if (res.ok) return true;
+  await showLocBlockDialog(context, res, action);
+  return false;
 }

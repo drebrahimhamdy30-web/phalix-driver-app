@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'api.dart';
+import 'location.dart';
 
 // شريط الحضور والانصراف والاستراحة — طلب من الطيار والإدارة توافق من الداش بورد
 class AttendanceBar extends StatefulWidget {
@@ -135,10 +136,23 @@ class AttendanceBarState extends State<AttendanceBar> {
     await refresh();
   }
 
+  Map<String, dynamic>? _locSettings;
+
   Future<void> _request(String type) async {
     if (_busy) return;
     setState(() => _busy = true);
     try {
+      // طلب الحضور لازم يكون داخل نطاق الصيدلية
+      if (type == 'online') {
+        _locSettings ??=
+            await Api.getLocationSettings(widget.branchId, widget.jwt);
+        final res = await checkPickupLocation(_locSettings);
+        if (!res.ok) {
+          if (mounted) await showLocBlockDialog(context, res, 'تطلب الحضور');
+          if (mounted) setState(() => _busy = false);
+          return;
+        }
+      }
       if (type == 'offline') {
         final block =
             await Api.offlineBlockReason(widget.driverId, widget.jwt);
