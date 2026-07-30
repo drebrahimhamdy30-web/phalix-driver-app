@@ -8,6 +8,9 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # مطلوب عشان الـworkflow يقدر ينشئ Release ويرفع الـAPK كأصل (asset)
+    permissions:
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -79,29 +82,46 @@ jobs:
         # ويعمل على كل الموبايلات الحديثة عمليًا
         run: flutter build apk --release --target-platform android-arm64
 
-      - name: Upload APK
+      - name: Prepare APK asset
+        # اسم ثابت للأصل عشان رابط التنزيل يبقى متوقّع
+        run: |
+          cp build/app/outputs/flutter-apk/app-release.apk phalix-driver.apk
+          echo "APK size: $(du -h phalix-driver.apk | cut -f1)"
+
+      - name: Upload APK (artifact)
         uses: actions/upload-artifact@v4
         with:
           name: phalix-driver-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: phalix-driver.apk
           if-no-files-found: error
 
-      - name: Publish APK to Supabase (auto-update)
+      - name: Create GitHub Release (reliable CDN download)
+        # GitHub Releases يخدم الملف من CDN سريع يدعم استئناف التحميل (Range) —
+        # يحل مشكلة تقطّع التنزيل عند ~1 ميجا على شبكات الموبايل الضعيفة
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          BUILD=$(grep '^version:' pubspec.yaml | sed 's/.*+//' | tr -d '[:space:]')
+          TAG="v$BUILD"
+          echo "Releasing $TAG"
+          # إنشاء الإصدار لو مش موجود، وإلا نستبدل الأصل (idempotent لإعادة التشغيل)
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" phalix-driver.apk --clobber
+          else
+            gh release create "$TAG" phalix-driver.apk \
+              --title "Phalix سائق $TAG" \
+              --notes "تحديث تلقائي — نسخة $BUILD"
+          fi
+
+      - name: Publish version (auto-update points to GitHub Release)
         run: |
           FUNC="https://rxtjoqulmgkkcohmgzgi.supabase.co/functions/v1/apk-publish"
           SECRET="87bcac4b4da9317f3b8716e6af9269533f8e2228cc0db43b"
-          APK="build/app/outputs/flutter-apk/app-release.apk"
           BUILD=$(grep '^version:' pubspec.yaml | sed 's/.*+//' | tr -d '[:space:]')
-          echo "Publishing build $BUILD"
-          # 1) رابط رفع موقّع
-          SIGN=$(curl -s -X POST "$FUNC" -H "Content-Type: application/json" -d "{\"secret\":\"$SECRET\",\"action\":\"sign\"}")
-          UURL=$(echo "$SIGN" | python3 -c "import sys,json;print(json.load(sys.stdin).get('full_url',''))")
-          if [ -z "$UURL" ]; then echo "sign failed: $SIGN"; exit 1; fi
-          echo "APK size: $(du -h "$APK" | cut -f1)"
-          # 2) رفع الـAPK — لازم ينجح قبل النشر، وإلا نفشل الـ job (نتجنب نشر نسخة بدون ملف)
-          UP=$(curl -s -X PUT "$UURL" -H "Content-Type: application/vnd.android.package-archive" --data-binary @"$APK" -o /tmp/up_resp.txt -w "%{http_code}")
-          echo "upload status: $UP"; cat /tmp/up_resp.txt 2>/dev/null; echo ""
-          if [ "$UP" != "200" ]; then echo "❌ APK upload failed ($UP) — لن يتم نشر النسخة"; exit 1; fi
-          # 3) نشر النسخة (بعد التأكد إن الملف اترفع)
-          curl -s -X POST "$FUNC" -H "Content-Type: application/json" -d "{\"secret\":\"$SECRET\",\"action\":\"publish\",\"version_code\":$BUILD,\"version_name\":\"poll-v$BUILD\"}"
-          echo ""
+          REPO="${{ github.repository }}"
+          APK_URL="https://github.com/$REPO/releases/download/v$BUILD/phalix-driver.apk"
+          echo "Publishing build $BUILD with apk_url=$APK_URL"
+          RESP=$(curl -s -X POST "$FUNC" -H "Content-Type: application/json" \
+            -d "{\"secret\":\"$SECRET\",\"action\":\"publish\",\"version_code\":$BUILD,\"version_name\":\"poll-v$BUILD\",\"apk_url\":\"$APK_URL\"}")
+          echo "publish response: $RESP"
+          echo "$RESP" | grep -q '"ok":true' || { echo "❌ publish failed"; exit 1; }
