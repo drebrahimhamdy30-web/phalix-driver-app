@@ -2,7 +2,7 @@ name: Build Android APK
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, master, silence-test ]
   workflow_dispatch:
 
 jobs:
@@ -106,18 +106,28 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           BUILD=$(grep '^version:' pubspec.yaml | sed 's/.*+//' | tr -d '[:space:]')
-          TAG="v$BUILD"
+          BRANCH="${{ github.ref_name }}"
+          if [ "$BRANCH" = "silence-test" ]; then
+            TAG="silence-test"
+            TITLE="Phalix سائق — نسخة تجريبية (كتم بزر الصوت)"
+            NOTES="نسخة تجريبية للاختبار فقط — مش منشورة للطيارين"
+            PRE="--prerelease"
+          else
+            TAG="v$BUILD"
+            TITLE="Phalix سائق $TAG"
+            NOTES="تحديث تلقائي — نسخة $BUILD (arm64 + نسخة 32-بت للموبايلات القديمة)"
+            PRE=""
+          fi
           echo "Releasing $TAG"
-          # إنشاء الإصدار لو مش موجود، وإلا نستبدل الأصل (idempotent لإعادة التشغيل)
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" phalix-driver.apk phalix-driver-arm32.apk --clobber
           else
             gh release create "$TAG" phalix-driver.apk phalix-driver-arm32.apk \
-              --title "Phalix سائق $TAG" \
-              --notes "تحديث تلقائي — نسخة $BUILD (arm64 + نسخة 32-بت للموبايلات القديمة)"
+              --title "$TITLE" --notes "$NOTES" $PRE
           fi
 
       - name: Publish version (auto-update points to GitHub Release)
+        if: github.ref_name != 'silence-test'
         run: |
           FUNC="https://rxtjoqulmgkkcohmgzgi.supabase.co/functions/v1/apk-publish"
           SECRET="87bcac4b4da9317f3b8716e6af9269533f8e2228cc0db43b"
