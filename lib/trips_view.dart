@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'api.dart';
 import 'config.dart';
 import 'location.dart';
@@ -702,12 +703,13 @@ class TripsViewState extends State<TripsView> {
     final name = o['customer_name'] ?? '—';
     final late = _isLate(o);
     return Card(
-      margin: const EdgeInsets.only(bottom: 10),
+      margin: const EdgeInsets.only(bottom: 12),
+      elevation: 2,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: late
-            ? const BorderSide(color: Color(0xFFdc2626), width: 1.5)
-            : BorderSide.none,
+            ? const BorderSide(color: Color(0xFFdc2626), width: 1.8)
+            : const BorderSide(color: Color(0xFFcbd5e1), width: 1.2),
       ),
       child: Column(
         children: [
@@ -833,16 +835,50 @@ class TripsViewState extends State<TripsView> {
             _note('💼 $staffNotes', const Color(0xFF7c3aed)),
           if (status == 'failed' && failReason != null)
             _note('⚠️ تعذر: $failReason', const Color(0xFFdc2626)),
-          if (o['customer_phone'] != null &&
-              '${o['customer_phone']}'.isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: Text('📞 ${o['customer_phone']}',
-                  style: const TextStyle(fontSize: 13, color: Colors.grey)),
-            ),
+          _phoneButtons(o),
           const SizedBox(height: 10),
           _orderActions(o),
         ],
+      ),
+    );
+  }
+
+  // أرقام موبايل العميل كأزرار اتصال (تدعم أكتر من رقم مفصولين بفاصلة)
+  Widget _phoneButtons(Map<String, dynamic> o) {
+    final raw = '${o['customer_phone'] ?? ''}';
+    if (raw.isEmpty) return const SizedBox.shrink();
+    final nums = raw
+        .split(RegExp(r'[,،]'))
+        .map((s) => s.replaceAll(RegExp(r'[^0-9+]'), ''))
+        .where((s) => s.length >= 5)
+        .toList();
+    if (nums.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: nums
+            .map((n) => InkWell(
+                  onTap: () => launchUrl(Uri.parse('tel:$n'),
+                      mode: LaunchMode.externalApplication),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFdcfce7),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFFbbf7d0)),
+                    ),
+                    child: Text('📞 اتصال: $n',
+                        textDirection: TextDirection.ltr,
+                        style: const TextStyle(
+                            color: Color(0xFF15803d),
+                            fontWeight: FontWeight.w800,
+                            fontSize: 13)),
+                  ),
+                ))
+            .toList(),
       ),
     );
   }
