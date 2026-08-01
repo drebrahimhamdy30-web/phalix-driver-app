@@ -351,12 +351,29 @@ class TripsViewState extends State<TripsView> {
         onRefresh: load,
         child: ListView(children: [
           const SizedBox(height: 160),
-          Center(
-              child: Text(
-                  _isActiveMode
-                      ? '🚗 لا توجد رحلة جارية'
-                      : '📋 لا توجد رحلات سابقة',
-                  style: const TextStyle(color: Colors.grey, fontSize: 16))),
+          _isActiveMode
+              ? const Center(
+                  child: Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 24),
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      Text('✅', style: TextStyle(fontSize: 44)),
+                      SizedBox(height: 8),
+                      Text('تم إنهاء الرحلة',
+                          style: TextStyle(
+                              color: Color(0xFF15803d),
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800)),
+                      SizedBox(height: 4),
+                      Text('جاهز لاستلام رحلات جديدة — في انتظار الطلبات',
+                          textAlign: TextAlign.center,
+                          style:
+                              TextStyle(color: Color(0xFF166534), fontSize: 13)),
+                    ]),
+                  ),
+                )
+              : const Center(
+                  child: Text('📋 لا توجد رحلات سابقة',
+                      style: TextStyle(color: Colors.grey, fontSize: 16))),
         ]),
       );
     }
@@ -1258,6 +1275,7 @@ class TripsViewState extends State<TripsView> {
           widget.driverId, widget.driverName, widget.jwt);
       unawaited(Api.triggerPrevTripCheck(widget.driverId, tid));
     });
+    _snack('✅ تم إنهاء الرحلة — جاهز لاستلام رحلات جديدة');
   }
 
   void _snack(String m) {
