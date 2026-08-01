@@ -78,9 +78,10 @@ jobs:
           grep -E "appVersion|appBuild" lib/config.dart
 
       - name: Build APK
-        # arm64 فقط: يقلّل حجم الـ APK بشكل كبير (يتجنّب تخطّي حد الرفع في التخزين)
-        # ويعمل على كل الموبايلات الحديثة عمليًا
-        run: flutter build apk --release --target-platform android-arm64
+        # APK شامل (universal) يحتوي 32-بت (armeabi-v7a) + 64-بت (arm64-v8a) —
+        # يشتغل على كل الموبايلات القديمة والحديثة. الحجم أكبر لكن الاستضافة على
+        # GitHub Releases مفيهاش حد للحجم، فمفيش مشكلة.
+        run: flutter build apk --release --target-platform android-arm,android-arm64
 
       - name: Prepare APK asset
         # اسم ثابت للأصل عشان رابط التنزيل يبقى متوقّع
