@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -32,11 +33,16 @@ final AndroidNotificationChannel ordersChannel = AndroidNotificationChannel(
   vibrationPattern: _vibration,
 );
 
-// مشغّل صوت الإنذار (حلقة مستمرة)
+// مشغّل صوت الإنذار — يشتغل مدة محدودة (5 ثوانٍ) بدل الرنين المستمر
 AudioPlayer? _alarmPlayer;
+Timer? _alarmTimer;
+const int _alarmSeconds = 5; // مدة تشغيل الصوت والاهتزاز قبل التوقف التلقائي
 Future<void> startAlarmSound() async {
   try {
+    // ألغِ أي مؤقّت سابق عشان الطلب الجديد يبدأ 5 ثوانٍ من جديد
+    _alarmTimer?.cancel();
     _alarmPlayer ??= AudioPlayer();
+    // نفضّل التكرار عشان يملأ الـ5 ثوانٍ لو المقطع أقصر، والمؤقّت هو اللي يوقّفه
     await _alarmPlayer!.setReleaseMode(ReleaseMode.loop);
     await _alarmPlayer!.setVolume(1.0);
     await _alarmPlayer!.play(AssetSource('alert.mp3'), volume: 1.0);
@@ -46,6 +52,10 @@ Future<void> startAlarmSound() async {
         Vibration.vibrate(pattern: [0, 700, 400, 700, 400], repeat: 0);
       }
     } catch (_) {}
+    // إيقاف تلقائي بعد 5 ثوانٍ
+    _alarmTimer = Timer(const Duration(seconds: _alarmSeconds), () {
+      stopAlarmSound();
+    });
     await _report('sound_started', {});
   } catch (e) {
     await _report('sound_error', {'err': e.toString()});
@@ -53,6 +63,10 @@ Future<void> startAlarmSound() async {
 }
 
 Future<void> stopAlarmSound() async {
+  try {
+    _alarmTimer?.cancel();
+    _alarmTimer = null;
+  } catch (_) {}
   try {
     await _alarmPlayer?.stop();
   } catch (_) {}
@@ -71,12 +85,36 @@ final AndroidNotificationChannel notifyChannel = AndroidNotificationChannel(
   enableVibration: true,
 );
 
+// الرد على ضغط زر "كتم الصوت" على الإشعار (خلفية — من غير فتح التطبيق)
+@pragma('vm:entry-point')
+void onSilenceActionBg(NotificationResponse r) {
+  if (r.actionId == 'silence_alarm') {
+    try { FlutterForegroundTask.initCommunicationPort(); } catch (_) {}
+    // ابعت لخدمة الخلفية توقف الصوت (المشغّل عايش هناك)
+    try { FlutterForegroundTask.sendDataToTask('stop_alarm'); } catch (_) {}
+    stopAlarmSound();
+    cancelAlarm();
+  }
+}
+
+void onSilenceActionFg(NotificationResponse r) {
+  if (r.actionId == 'silence_alarm') {
+    try { FlutterForegroundTask.sendDataToTask('stop_alarm'); } catch (_) {}
+    stopAlarmSound();
+    cancelAlarm();
+  }
+}
+
 // تهيئة نظام الإشعارات + القنوات (تُستدعى في كل عملية/isolate)
 Future<void> initNotifications() async {
   const initSettings = InitializationSettings(
     android: AndroidInitializationSettings('@mipmap/ic_launcher'),
   );
-  await localNotifications.initialize(initSettings);
+  await localNotifications.initialize(
+    initSettings,
+    onDidReceiveNotificationResponse: onSilenceActionFg,
+    onDidReceiveBackgroundNotificationResponse: onSilenceActionBg,
+  );
   final android = localNotifications.resolvePlatformSpecificImplementation<
       AndroidFlutterLocalNotificationsPlugin>();
   await android?.createNotificationChannel(ordersChannel);
@@ -142,6 +180,15 @@ Future<void> showAlarm(String title, String body) async {
         autoCancel: false,
         category: AndroidNotificationCategory.alarm,
         fullScreenIntent: true, // يظهر بارزًا حتى والشاشة مقفولة
+        actions: const <AndroidNotificationAction>[
+          // زر كتم الصوت — يوقف الرنين من غير فتح التطبيق أو القفل
+          AndroidNotificationAction(
+            'silence_alarm',
+            '🔇 كتم الصوت',
+            showsUserInterface: false,
+            cancelNotification: false,
+          ),
+        ],
       ),
     ),
   );
