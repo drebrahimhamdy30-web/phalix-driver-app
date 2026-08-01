@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -32,11 +33,16 @@ final AndroidNotificationChannel ordersChannel = AndroidNotificationChannel(
   vibrationPattern: _vibration,
 );
 
-// مشغّل صوت الإنذار (حلقة مستمرة)
+// مشغّل صوت الإنذار — يشتغل مدة محدودة (5 ثوانٍ) بدل الرنين المستمر
 AudioPlayer? _alarmPlayer;
+Timer? _alarmTimer;
+const int _alarmSeconds = 5; // مدة تشغيل الصوت والاهتزاز قبل التوقف التلقائي
 Future<void> startAlarmSound() async {
   try {
+    // ألغِ أي مؤقّت سابق عشان الطلب الجديد يبدأ 5 ثوانٍ من جديد
+    _alarmTimer?.cancel();
     _alarmPlayer ??= AudioPlayer();
+    // نفضّل التكرار عشان يملأ الـ5 ثوانٍ لو المقطع أقصر، والمؤقّت هو اللي يوقّفه
     await _alarmPlayer!.setReleaseMode(ReleaseMode.loop);
     await _alarmPlayer!.setVolume(1.0);
     await _alarmPlayer!.play(AssetSource('alert.mp3'), volume: 1.0);
@@ -46,6 +52,10 @@ Future<void> startAlarmSound() async {
         Vibration.vibrate(pattern: [0, 700, 400, 700, 400], repeat: 0);
       }
     } catch (_) {}
+    // إيقاف تلقائي بعد 5 ثوانٍ
+    _alarmTimer = Timer(const Duration(seconds: _alarmSeconds), () {
+      stopAlarmSound();
+    });
     await _report('sound_started', {});
   } catch (e) {
     await _report('sound_error', {'err': e.toString()});
@@ -53,6 +63,10 @@ Future<void> startAlarmSound() async {
 }
 
 Future<void> stopAlarmSound() async {
+  try {
+    _alarmTimer?.cancel();
+    _alarmTimer = null;
+  } catch (_) {}
   try {
     await _alarmPlayer?.stop();
   } catch (_) {}
