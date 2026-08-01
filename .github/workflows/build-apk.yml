@@ -78,15 +78,19 @@ jobs:
           grep -E "appVersion|appBuild" lib/config.dart
 
       - name: Build APK
-        # arm64 فقط: حجم أصغر (~19 ميجا) عشان التحميل يبقى أخف وأضمن على الشبكات الضعيفة
-        # ويتجنّب مشكلة "ملف التطبيق ناقص". كل موبايلات الأسطول الحديثة 64-بت فبيشتغل عليها.
-        run: flutter build apk --release --target-platform android-arm64
+        # نسختين منفصلتين صغيرتين (split-per-abi) بدل نسخة شاملة كبيرة:
+        #  - arm64-v8a للموبايلات الحديثة (عليها التحديث التلقائي)
+        #  - armeabi-v7a للموبايلات القديمة 32-بت (رابط مخصوص)
+        # كل واحدة ~17-19 ميجا فالتحميل خفيف وأضمن على الشبكات الضعيفة.
+        run: flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64
 
-      - name: Prepare APK asset
-        # اسم ثابت للأصل عشان رابط التنزيل يبقى متوقّع
+      - name: Prepare APK assets
+        # أسماء ثابتة عشان روابط التنزيل تبقى متوقّعة
         run: |
-          cp build/app/outputs/flutter-apk/app-release.apk phalix-driver.apk
-          echo "APK size: $(du -h phalix-driver.apk | cut -f1)"
+          cp build/app/outputs/flutter-apk/app-arm64-v8a-release.apk phalix-driver.apk
+          cp build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk phalix-driver-arm32.apk
+          echo "arm64 APK size: $(du -h phalix-driver.apk | cut -f1)"
+          echo "arm32 APK size: $(du -h phalix-driver-arm32.apk | cut -f1)"
 
       - name: Upload APK (artifact)
         uses: actions/upload-artifact@v4
@@ -106,11 +110,11 @@ jobs:
           echo "Releasing $TAG"
           # إنشاء الإصدار لو مش موجود، وإلا نستبدل الأصل (idempotent لإعادة التشغيل)
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" phalix-driver.apk --clobber
+            gh release upload "$TAG" phalix-driver.apk phalix-driver-arm32.apk --clobber
           else
-            gh release create "$TAG" phalix-driver.apk \
+            gh release create "$TAG" phalix-driver.apk phalix-driver-arm32.apk \
               --title "Phalix سائق $TAG" \
-              --notes "تحديث تلقائي — نسخة $BUILD"
+              --notes "تحديث تلقائي — نسخة $BUILD (arm64 + نسخة 32-بت للموبايلات القديمة)"
           fi
 
       - name: Publish version (auto-update points to GitHub Release)
