@@ -7,7 +7,6 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:vibration/vibration.dart';
-import 'package:flutter_volume_controller/flutter_volume_controller.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -35,33 +34,6 @@ final AndroidNotificationChannel ordersChannel = AndroidNotificationChannel(
 
 // مشغّل صوت الإنذار (حلقة مستمرة)
 AudioPlayer? _alarmPlayer;
-
-// كتم الإنذار بزر الصوت الجانبي (زى إسكات رنة المكالمة) — يشتغل والموبايل مقفول
-bool _volSilenceOn = false;
-int _volArmAtMs = 0;
-Future<void> _startVolumeSilencer() async {
-  if (_volSilenceOn) return;
-  _volSilenceOn = true;
-  _volArmAtMs = DateTime.now().millisecondsSinceEpoch;
-  try {
-    FlutterVolumeController.updateShowSystemUI = false;
-    FlutterVolumeController.addListener((double volume) async {
-      // تجاهل أول لحظة بعد التسجيل (استدعاء مبدئي) — بعدها أي ضغطة تكتم
-      if (DateTime.now().millisecondsSinceEpoch - _volArmAtMs < 700) return;
-      await stopAlarmSound();
-      await cancelAlarm();
-    }, fetchInitialVolume: false);
-  } catch (_) {}
-}
-
-void _stopVolumeSilencer() {
-  if (!_volSilenceOn) return;
-  _volSilenceOn = false;
-  try {
-    FlutterVolumeController.removeListener();
-  } catch (_) {}
-}
-
 Future<void> startAlarmSound() async {
   try {
     _alarmPlayer ??= AudioPlayer();
@@ -74,7 +46,6 @@ Future<void> startAlarmSound() async {
         Vibration.vibrate(pattern: [0, 700, 400, 700, 400], repeat: 0);
       }
     } catch (_) {}
-    await _startVolumeSilencer(); // اسمع لزر الصوت عشان يكتم بضغطة
     await _report('sound_started', {});
   } catch (e) {
     await _report('sound_error', {'err': e.toString()});
@@ -82,7 +53,6 @@ Future<void> startAlarmSound() async {
 }
 
 Future<void> stopAlarmSound() async {
-  _stopVolumeSilencer();
   try {
     await _alarmPlayer?.stop();
   } catch (_) {}
@@ -101,12 +71,36 @@ final AndroidNotificationChannel notifyChannel = AndroidNotificationChannel(
   enableVibration: true,
 );
 
+// الرد على ضغط زر "كتم الصوت" على الإشعار (خلفية — من غير فتح التطبيق)
+@pragma('vm:entry-point')
+void onSilenceActionBg(NotificationResponse r) {
+  if (r.actionId == 'silence_alarm') {
+    try { FlutterForegroundTask.initCommunicationPort(); } catch (_) {}
+    // ابعت لخدمة الخلفية توقف الصوت (المشغّل عايش هناك)
+    try { FlutterForegroundTask.sendDataToTask('stop_alarm'); } catch (_) {}
+    stopAlarmSound();
+    cancelAlarm();
+  }
+}
+
+void onSilenceActionFg(NotificationResponse r) {
+  if (r.actionId == 'silence_alarm') {
+    try { FlutterForegroundTask.sendDataToTask('stop_alarm'); } catch (_) {}
+    stopAlarmSound();
+    cancelAlarm();
+  }
+}
+
 // تهيئة نظام الإشعارات + القنوات (تُستدعى في كل عملية/isolate)
 Future<void> initNotifications() async {
   const initSettings = InitializationSettings(
     android: AndroidInitializationSettings('@mipmap/ic_launcher'),
   );
-  await localNotifications.initialize(initSettings);
+  await localNotifications.initialize(
+    initSettings,
+    onDidReceiveNotificationResponse: onSilenceActionFg,
+    onDidReceiveBackgroundNotificationResponse: onSilenceActionBg,
+  );
   final android = localNotifications.resolvePlatformSpecificImplementation<
       AndroidFlutterLocalNotificationsPlugin>();
   await android?.createNotificationChannel(ordersChannel);
@@ -172,6 +166,15 @@ Future<void> showAlarm(String title, String body) async {
         autoCancel: false,
         category: AndroidNotificationCategory.alarm,
         fullScreenIntent: true, // يظهر بارزًا حتى والشاشة مقفولة
+        actions: const <AndroidNotificationAction>[
+          // زر كتم الصوت — يوقف الرنين من غير فتح التطبيق أو القفل
+          AndroidNotificationAction(
+            'silence_alarm',
+            '🔇 كتم الصوت',
+            showsUserInterface: false,
+            cancelNotification: false,
+          ),
+        ],
       ),
     ),
   );
