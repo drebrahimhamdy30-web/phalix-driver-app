@@ -7,6 +7,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:vibration/vibration.dart';
+import 'package:flutter_volume_controller/flutter_volume_controller.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -34,6 +35,30 @@ final AndroidNotificationChannel ordersChannel = AndroidNotificationChannel(
 
 // مشغّل صوت الإنذار (حلقة مستمرة)
 AudioPlayer? _alarmPlayer;
+
+// كتم الإنذار بزر الصوت الجانبي (زى إسكات رنة المكالمة) — يشتغل والموبايل مقفول
+bool _volSilenceOn = false;
+Future<void> _startVolumeSilencer() async {
+  if (_volSilenceOn) return;
+  _volSilenceOn = true;
+  try {
+    // أي ضغطة على زر الصوت أثناء الرنين → اكتم الإنذار فورًا
+    // fetchInitialVolume:false عشان ما يتكتمش من غير ضغط عند التسجيل
+    FlutterVolumeController.addListener((double volume) async {
+      await stopAlarmSound();
+      await cancelAlarm();
+    }, fetchInitialVolume: false);
+  } catch (_) {}
+}
+
+void _stopVolumeSilencer() {
+  if (!_volSilenceOn) return;
+  _volSilenceOn = false;
+  try {
+    FlutterVolumeController.removeListener();
+  } catch (_) {}
+}
+
 Future<void> startAlarmSound() async {
   try {
     _alarmPlayer ??= AudioPlayer();
@@ -46,6 +71,7 @@ Future<void> startAlarmSound() async {
         Vibration.vibrate(pattern: [0, 700, 400, 700, 400], repeat: 0);
       }
     } catch (_) {}
+    await _startVolumeSilencer(); // اسمع لزر الصوت عشان يكتم بضغطة
     await _report('sound_started', {});
   } catch (e) {
     await _report('sound_error', {'err': e.toString()});
@@ -53,6 +79,7 @@ Future<void> startAlarmSound() async {
 }
 
 Future<void> stopAlarmSound() async {
+  _stopVolumeSilencer();
   try {
     await _alarmPlayer?.stop();
   } catch (_) {}
