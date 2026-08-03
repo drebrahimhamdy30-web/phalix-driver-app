@@ -84,6 +84,14 @@ class Api {
 
   static String get _rest => '${Config.supabaseUrl}/rest/v1';
 
+  // إحصائيات الشهر الحالي للطيار: عدد الرحلات + عدد الطلبات
+  static Future<Map<String, dynamic>> getMonthStats(
+      String driverId, String jwt) async {
+    final r = await _getList(
+        '$_rest/rpc/get_driver_month_stats?p_driver=$driverId', jwt);
+    return r.isNotEmpty ? r.first : {'trips': 0, 'orders': 0};
+  }
+
   static Future<List<Map<String, dynamic>>> _getList(
       String url, String jwt) async {
     try {

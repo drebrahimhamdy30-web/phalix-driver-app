@@ -84,6 +84,8 @@ class TripsViewState extends State<TripsView> {
   Map<String, dynamic>? _locSettings;
   int _lateAssigned = 10;
   int _latePicked = 30;
+  int _monthTrips = 0;   // عدد رحلات الشهر الحالي (لشاشة الرحلات السابقة)
+  int _monthOrders = 0;  // عدد طلبات الشهر الحالي
   bool _showStats = false;
   bool _showOrderRating = false;
   bool _showTripRating = false;
@@ -140,6 +142,17 @@ class TripsViewState extends State<TripsView> {
       }
       _loading = false;
     });
+    // إحصائيات الشهر (رحلات/طلبات) لشاشة الرحلات السابقة — بالخلفية
+    if (!_isActiveMode) {
+      Api.getMonthStats(widget.driverId, widget.jwt).then((ms) {
+        if (!mounted) return;
+        int toInt(v) => v is int ? v : (int.tryParse('$v') ?? 0);
+        setState(() {
+          _monthTrips = toInt(ms['trips']);
+          _monthOrders = toInt(ms['orders']);
+        });
+      });
+    }
     // تنبيهات الرحلة السابقة على نظام الصيدلية (RPC) ثانوية → بالخلفية
     // عشان اللوحة تظهر فورًا من غير ما تستنى النداء ده
     if (activeTrip.isNotEmpty) {
@@ -351,7 +364,8 @@ class TripsViewState extends State<TripsView> {
       return RefreshIndicator(
         onRefresh: load,
         child: ListView(children: [
-          const SizedBox(height: 160),
+          if (!_isActiveMode) _monthStatsBar(),
+          const SizedBox(height: 120),
           _isActiveMode
               ? const Center(
                   child: Padding(
@@ -383,6 +397,7 @@ class TripsViewState extends State<TripsView> {
     final orders = _tripOrders['${trip['id']}'] ?? [];
     return Column(
       children: [
+        if (!_isActiveMode) _monthStatsBar(),
         if (_isActiveMode && _showStats) _statsBar(),
         if (_isActiveMode && _reviewFlags.isNotEmpty) _reviewBanner(),
         if (vis.length > 1) _tabs(),
@@ -637,6 +652,55 @@ class TripsViewState extends State<TripsView> {
           );
         },
       ),
+    );
+  }
+
+  // شريط إجمالي الشهر الحالي (رحلات + طلبات) — يظهر في شاشة الرحلات السابقة
+  Widget _monthStatsBar() {
+    Widget tile(String label, int val, Color c, IconData ic) => Expanded(
+          child: Container(
+            margin: const EdgeInsets.symmetric(horizontal: 4),
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            decoration: BoxDecoration(
+              color: c.withOpacity(0.10),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: c.withOpacity(0.25)),
+            ),
+            child: Column(children: [
+              Icon(ic, color: c, size: 20),
+              const SizedBox(height: 3),
+              Text('$val',
+                  style: TextStyle(
+                      color: c, fontSize: 20, fontWeight: FontWeight.w800)),
+              Text(label,
+                  style: const TextStyle(
+                      color: Color(0xFF64748b),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700)),
+            ]),
+          ),
+        );
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 10, 8, 2),
+      child: Column(children: [
+        const Align(
+          alignment: Alignment.centerRight,
+          child: Padding(
+            padding: EdgeInsets.only(right: 6, bottom: 6),
+            child: Text('📊 إجمالي الشهر الحالي',
+                style: TextStyle(
+                    color: Color(0xFF334155),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w800)),
+          ),
+        ),
+        Row(children: [
+          tile('رحلات', _monthTrips, const Color(0xFF2563eb),
+              Icons.local_shipping),
+          tile('طلبات', _monthOrders, const Color(0xFF16a34a),
+              Icons.inventory_2),
+        ]),
+      ]),
     );
   }
 
