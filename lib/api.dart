@@ -243,25 +243,23 @@ class Api {
           .toList();
       if (!online.contains(driverId)) return null; // مش حاضر
 
-      // حالة الطلبات: نحدد المشغول (خرج برحلة) والعدد الحالي لكل طيار
+      // مين مش فاضي: عنده أي طلب شغّال (معيّن أو مستلم) أو على رحلة نشطة → برّه الدور
       final orders = online.isEmpty
           ? <dynamic>[]
           : await _getList(
-              '$_rest/orders?status=in.(assigned,picked,delivered,failed)&driver_id=in.(${online.join(',')})&select=driver_id,status',
+              '$_rest/orders?status=in.(assigned,picked)&driver_id=in.(${online.join(',')})&select=driver_id',
+              jwt);
+      final trips = online.isEmpty
+          ? <dynamic>[]
+          : await _getList(
+              '$_rest/trips?status=in.(active,pending_complete)&driver_id=in.(${online.join(',')})&select=driver_id',
               jwt);
       final busy = <String>{};
-      final activeCount = {for (final id in online) id: 0};
-      for (final o in orders) {
-        final d = '${o['driver_id']}';
-        final st = '${o['status']}';
-        // خرج برحلة فعلاً (معاه دوا في الشارع) → مش متاح لطلب جديد
-        if (st == 'picked' || st == 'delivered' || st == 'failed') busy.add(d);
-        if ((st == 'assigned' || st == 'picked') && activeCount.containsKey(d)) {
-          activeCount[d] = activeCount[d]! + 1;
-        }
-      }
+      for (final o in orders) busy.add('${o['driver_id']}');
+      for (final t in trips) busy.add('${t['driver_id']}');
+      final activeCount = <String, int>{}; // كل الدور فاضيين (0 طلبات)
 
-      // المتاحون فقط (الحاضرون اللي مش خارجين برحلة) — دول اللي بيتحسب بينهم الدور
+      // المتاحون فعليًا فقط (فاضيين: مفيش طلبات ولا رحلة) — دول اللي بيتحسب بينهم الدور
       final pool = online.where((id) => !busy.contains(id)).toList();
       if (!pool.contains(driverId)) pool.add(driverId); // اعرض له رقمًا حتى لو لسه بيخلّص
       final total = pool.length;
