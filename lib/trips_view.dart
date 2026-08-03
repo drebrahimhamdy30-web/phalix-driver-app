@@ -791,13 +791,13 @@ class TripsViewState extends State<TripsView> {
                 () => open ? _expanded.remove(id) : _expanded.add(id)),
             title: Row(
               children: [
-                Text('كود: $custCode',
-                    style: const TextStyle(fontWeight: FontWeight.bold)),
-                const SizedBox(width: 8),
+                // السطر الأول: اسم العميل كامل
                 Expanded(
                     child: Text('$name',
+                        maxLines: 2,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(fontWeight: FontWeight.w600))),
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 15))),
                 if (late)
                   const Padding(
                     padding: EdgeInsets.only(left: 4),
@@ -824,12 +824,41 @@ class TripsViewState extends State<TripsView> {
               ],
             ),
             subtitle: Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: Wrap(children: [
-                ..._orderTimers(o),
-                if (_showOrderRating && o['perf_rating'] != null)
-                  _ratingChip(o),
-              ]),
+              padding: const EdgeInsets.only(top: 5),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // السطر الثاني: العنوان
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('📍 ', style: TextStyle(fontSize: 12.5)),
+                      Expanded(
+                          child: Text('${o['customer_address'] ?? '—'}',
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  fontSize: 12.5, color: Color(0xFF475569)))),
+                    ],
+                  ),
+                  const SizedBox(height: 5),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 4,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      Text('🆔 كود: $custCode',
+                          style: const TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              color: Color(0xFF64748b))),
+                      ..._orderTimers(o),
+                      if (_showOrderRating && o['perf_rating'] != null)
+                        _ratingChip(o),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
           if (open) _orderDetail(o),
@@ -853,13 +882,6 @@ class TripsViewState extends State<TripsView> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Divider(),
-          Row(children: [
-            const Text('📍 '),
-            Expanded(
-                child: Text('${o['customer_address'] ?? '—'}',
-                    style: const TextStyle(fontSize: 13))),
-          ]),
-          const SizedBox(height: 6),
           Wrap(spacing: 6, runSpacing: 6, children: [
             if (region != null && '$region'.isNotEmpty) _tag('$region', const Color(0xFF6366f1)),
             _tag(pm != null ? (_payLabel[pm] ?? '$pm') : '💵 كاش',
