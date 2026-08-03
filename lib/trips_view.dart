@@ -19,8 +19,9 @@ const _payLabel = {
   'visa': '💳 فيزا',
   'transfer': '🏦 تحويل',
   'deferred': '📋 آجل',
+  'paid': '✅ خالص',
 };
-const _payOptions = ['cash', 'visa', 'transfer', 'deferred'];
+const _payOptions = ['cash', 'visa', 'transfer', 'paid'];
 const _failReasons = [
   'لم أستطع التواصل مع العميل',
   'العميل ألغى الطلب',
