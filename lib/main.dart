@@ -36,7 +36,7 @@ final AndroidNotificationChannel ordersChannel = AndroidNotificationChannel(
 // مشغّل صوت الإنذار — يشتغل مدة محدودة (5 ثوانٍ) بدل الرنين المستمر
 AudioPlayer? _alarmPlayer;
 Timer? _alarmTimer;
-const int _alarmSeconds = 5; // مدة تشغيل الصوت والاهتزاز قبل التوقف التلقائي
+const int _alarmSeconds = 3; // مدة تشغيل الصوت والاهتزاز قبل التوقف التلقائي
 Future<void> startAlarmSound() async {
   try {
     // ألغِ أي مؤقّت سابق عشان الطلب الجديد يبدأ 5 ثوانٍ من جديد
