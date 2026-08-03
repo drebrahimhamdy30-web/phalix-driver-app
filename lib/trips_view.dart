@@ -901,6 +901,7 @@ class TripsViewState extends State<TripsView> {
                 ),
               );
             }),
+          _orderItemsList(o),
           if (urgent)
             _note('🚨 طلب عاجل', const Color(0xFFdc2626)),
           if (staffNotes != null && '$staffNotes'.isNotEmpty)
@@ -910,6 +911,79 @@ class TripsViewState extends State<TripsView> {
           _phoneButtons(o),
           const SizedBox(height: 10),
           _orderActions(o),
+        ],
+      ),
+    );
+  }
+
+  // قائمة أصناف الطلب (من عمود items — مصفوفة {name, qty})
+  Widget _orderItemsList(Map<String, dynamic> o) {
+    final raw = o['items'];
+    if (raw is! List || raw.isEmpty) return const SizedBox.shrink();
+    String nameOf(dynamic it) {
+      if (it is Map) {
+        final n = it['name'] ?? it['item_name'] ?? it['product'] ?? it['صنف'];
+        if (n != null && '$n'.trim().isNotEmpty) return '$n'.trim();
+      }
+      return '$it'.trim();
+    }
+    String qtyOf(dynamic it) {
+      if (it is Map) {
+        final q = it['qty'] ?? it['quantity'] ?? it['count'] ?? it['كمية'];
+        if (q != null && '$q'.trim().isNotEmpty && '$q' != '1') return '$q';
+      }
+      return '';
+    }
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFf8fafc),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFe2e8f0)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text('🧾 أصناف الطلب (${raw.length})',
+              style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 13,
+                  color: AppTheme.appBar)),
+          const SizedBox(height: 6),
+          ...raw.map((it) {
+            final q = qtyOf(it);
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('• ', style: TextStyle(fontSize: 13)),
+                  Expanded(
+                    child: Text(nameOf(it),
+                        style: const TextStyle(
+                            fontSize: 13, fontWeight: FontWeight.w600)),
+                  ),
+                  if (q.isNotEmpty)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppTheme.appBar,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text('×$q',
+                          textDirection: TextDirection.ltr,
+                          style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w800)),
+                    ),
+                ],
+              ),
+            );
+          }),
         ],
       ),
     );
