@@ -763,7 +763,9 @@ class TripsViewState extends State<TripsView> {
     final id = '${o['id']}';
     final status = '${o['status']}';
     final open = _expanded.contains(id);
-    final bill = o['bill_no'] ?? id.substring(0, id.length >= 8 ? 8 : id.length);
+    // نعرض كود العميل بدل رقم الفاتورة
+    final ccRaw = '${o['cust_code'] ?? ''}'.trim();
+    final custCode = (ccRaw.isEmpty || ccRaw == 'null') ? '—' : ccRaw;
     final name = o['customer_name'] ?? '—';
     final late = _isLate(o);
     return Card(
@@ -782,7 +784,7 @@ class TripsViewState extends State<TripsView> {
                 () => open ? _expanded.remove(id) : _expanded.add(id)),
             title: Row(
               children: [
-                Text('#$bill',
+                Text('كود: $custCode',
                     style: const TextStyle(fontWeight: FontWeight.bold)),
                 const SizedBox(width: 8),
                 Expanded(
