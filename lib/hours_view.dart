@@ -251,7 +251,9 @@ class _HoursViewState extends State<HoursView> {
               const Spacer(),
               Text('إجمالي: ${_fmTime(_monthEff)}',
                   style: const TextStyle(
-                      fontWeight: FontWeight.bold, color: AppTheme.primary)),
+                      fontWeight: FontWeight.w900,
+                      fontSize: 15,
+                      color: AppTheme.appBar)),
             ],
           ),
         ),
@@ -327,9 +329,9 @@ class _HoursViewState extends State<HoursView> {
                                         children: [
                                           Text(_fmTime(s.effective),
                                               style: const TextStyle(
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 15,
-                                                  color: AppTheme.primary)),
+                                                  fontWeight: FontWeight.w900,
+                                                  fontSize: 17,
+                                                  color: AppTheme.appBar)),
                                           const Text('عمل فعلي',
                                               style: TextStyle(
                                                   fontSize: 10,
