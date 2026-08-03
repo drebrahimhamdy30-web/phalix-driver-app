@@ -118,6 +118,9 @@ jobs:
           fi
 
       - name: Publish version (auto-update points to GitHub Release)
+        # لو رسالة الكوميت فيها [skip-ota] → نبني النسخة وننشر الـAPK على GitHub بس من غير ما ندفع تحديث للطيارين
+        # (بننشر التحديث يدويًا بعد التأكد)
+        if: ${{ !contains(github.event.head_commit.message, '[skip-ota]') }}
         run: |
           FUNC="https://rxtjoqulmgkkcohmgzgi.supabase.co/functions/v1/apk-publish"
           SECRET="87bcac4b4da9317f3b8716e6af9269533f8e2228cc0db43b"
