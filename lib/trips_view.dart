@@ -395,6 +395,12 @@ class TripsViewState extends State<TripsView> {
     final trip = vis.firstWhere((t) => '${t['id']}' == _selected,
         orElse: () => vis.first);
     final orders = _tripOrders['${trip['id']}'] ?? [];
+    // الطلبات اللي اتوصّلت تنزل تحت، والباقي فوق (مع الحفاظ على ترتيبهم)
+    bool _isDone(o) => ['delivered', 'completed'].contains('${o['status']}');
+    final displayOrders = [
+      ...orders.where((o) => !_isDone(o)),
+      ...orders.where((o) => _isDone(o)),
+    ];
     return Column(
       children: [
         if (!_isActiveMode) _monthStatsBar(),
@@ -409,7 +415,7 @@ class TripsViewState extends State<TripsView> {
               padding: const EdgeInsets.all(12),
               children: [
                 _tripActions(trip, orders),
-                ...orders.map((o) => _orderCard(o)),
+                ...displayOrders.map((o) => _orderCard(o)),
                 _summary(trip, orders),
                 const SizedBox(height: 24),
               ],
@@ -925,28 +931,60 @@ class TripsViewState extends State<TripsView> {
         spacing: 8,
         runSpacing: 8,
         children: nums
-            .map((n) => InkWell(
-                  onTap: () => launchUrl(Uri.parse('tel:$n'),
-                      mode: LaunchMode.externalApplication),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFdcfce7),
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFFbbf7d0)),
+            .expand((n) => [
+                  // زر الاتصال
+                  InkWell(
+                    onTap: () => launchUrl(Uri.parse('tel:$n'),
+                        mode: LaunchMode.externalApplication),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFdcfce7),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: const Color(0xFFbbf7d0)),
+                      ),
+                      child: Text('📞 اتصال: $n',
+                          textDirection: TextDirection.ltr,
+                          style: const TextStyle(
+                              color: Color(0xFF15803d),
+                              fontWeight: FontWeight.w800,
+                              fontSize: 13)),
                     ),
-                    child: Text('📞 اتصال: $n',
-                        textDirection: TextDirection.ltr,
-                        style: const TextStyle(
-                            color: Color(0xFF15803d),
-                            fontWeight: FontWeight.w800,
-                            fontSize: 13)),
                   ),
-                ))
+                  // زر واتساب
+                  InkWell(
+                    onTap: () => launchUrl(
+                        Uri.parse('https://wa.me/${_waNumber(n)}'),
+                        mode: LaunchMode.externalApplication),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF25D366),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Text('🟢 واتساب',
+                          style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 13)),
+                    ),
+                  ),
+                ])
             .toList(),
       ),
     );
+  }
+
+  // تحويل الرقم لصيغة دولية لواتساب (مصر): 01xxxxxxxxx → 201xxxxxxxxx
+  String _waNumber(String n) {
+    var x = n.replaceAll(RegExp(r'[^0-9]'), '');
+    if (x.startsWith('00')) x = x.substring(2);
+    if (x.startsWith('20')) return x;
+    if (x.startsWith('0')) return '20${x.substring(1)}';
+    if (x.length == 10 && x.startsWith('1')) return '20$x';
+    return x;
   }
 
   Widget _orderActions(Map<String, dynamic> o) {
