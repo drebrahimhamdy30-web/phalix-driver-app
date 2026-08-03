@@ -82,6 +82,7 @@ class TripsViewState extends State<TripsView> {
   bool _canComplete = true;
   String? _selected;
   final Set<String> _expanded = {};
+  final Map<String, List<Map<String, dynamic>>> _itemsCache = {};
   Map<String, dynamic>? _locSettings;
   int _lateAssigned = 10;
   int _latePicked = 30;
@@ -924,7 +925,7 @@ class TripsViewState extends State<TripsView> {
                 ),
               );
             }),
-          _orderItemsList(o),
+          _orderItemsBtn(o),
           if (urgent)
             _note('🚨 طلب عاجل', const Color(0xFFdc2626)),
           if (staffNotes != null && '$staffNotes'.isNotEmpty)
@@ -940,73 +941,130 @@ class TripsViewState extends State<TripsView> {
   }
 
   // قائمة أصناف الطلب (من عمود items — مصفوفة {name, qty})
-  Widget _orderItemsList(Map<String, dynamic> o) {
-    final raw = o['items'];
-    if (raw is! List || raw.isEmpty) return const SizedBox.shrink();
-    String nameOf(dynamic it) {
-      if (it is Map) {
-        final n = it['name'] ?? it['item_name'] ?? it['product'] ?? it['صنف'];
-        if (n != null && '$n'.trim().isNotEmpty) return '$n'.trim();
-      }
-      return '$it'.trim();
-    }
-    String qtyOf(dynamic it) {
-      if (it is Map) {
-        final q = it['qty'] ?? it['quantity'] ?? it['count'] ?? it['كمية'];
-        if (q != null && '$q'.trim().isNotEmpty && '$q' != '1') return '$q';
-      }
-      return '';
-    }
-    return Container(
-      width: double.infinity,
-      margin: const EdgeInsets.only(top: 10),
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: const Color(0xFFf8fafc),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFe2e8f0)),
+  // زر عرض أصناف الطلب — يجلبها من ويبهوك n8n ويعرضها في نافذة منبثقة
+  Widget _orderItemsBtn(Map<String, dynamic> o) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 10),
+      child: SizedBox(
+        width: double.infinity,
+        child: OutlinedButton(
+          onPressed: () => _showItems(o),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppTheme.appBar,
+            side: const BorderSide(color: AppTheme.appBar),
+            padding: const EdgeInsets.symmetric(vertical: 10),
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10)),
+          ),
+          child: const Text('🧾 عرض الأصناف',
+              style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13.5)),
+        ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text('🧾 أصناف الطلب (${raw.length})',
-              style: const TextStyle(
-                  fontWeight: FontWeight.w800,
-                  fontSize: 13,
-                  color: AppTheme.appBar)),
-          const SizedBox(height: 6),
-          ...raw.map((it) {
-            final q = qtyOf(it);
-            return Padding(
-              padding: const EdgeInsets.symmetric(vertical: 2),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('• ', style: TextStyle(fontSize: 13)),
-                  Expanded(
-                    child: Text(nameOf(it),
+    );
+  }
+
+  void _showItems(Map<String, dynamic> o) {
+    final id = '${o['id']}';
+    final billNo = '${o['bill_no'] ?? ''}'.trim();
+    final branchId = '${o['branch_id'] ?? ''}';
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(16))),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 20),
+        child: FutureBuilder<List<Map<String, dynamic>>>(
+          future: _itemsCache.containsKey(id)
+              ? Future.value(_itemsCache[id])
+              : Api.getBillItems(billNo, branchId)
+                  .then((v) => _itemsCache[id] = v),
+          builder: (c, snap) {
+            if (snap.connectionState != ConnectionState.done) {
+              return const Padding(
+                padding: EdgeInsets.all(28),
+                child: Center(child: CircularProgressIndicator()),
+              );
+            }
+            if (snap.hasError) {
+              return Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text('❌ تعذّر جلب الأصناف\n${snap.error}',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Color(0xFFdc2626))),
+              );
+            }
+            final items = snap.data ?? [];
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('🧾 أصناف الفاتورة${billNo.isNotEmpty ? ' #$billNo' : ''}',
                         style: const TextStyle(
-                            fontSize: 13, fontWeight: FontWeight.w600)),
-                  ),
-                  if (q.isNotEmpty)
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: AppTheme.appBar,
-                        borderRadius: BorderRadius.circular(6),
-                      ),
-                      child: Text('×$q',
-                          textDirection: TextDirection.ltr,
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w800)),
+                            fontWeight: FontWeight.w800,
+                            fontSize: 15,
+                            color: AppTheme.appBar)),
+                    Text('${items.length} صنف',
+                        style: const TextStyle(
+                            color: Colors.grey, fontSize: 12)),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                if (items.isEmpty)
+                  const Padding(
+                    padding: EdgeInsets.all(20),
+                    child: Center(
+                        child: Text('لا توجد أصناف في هذه الفاتورة',
+                            style: TextStyle(color: Colors.grey))),
+                  )
+                else
+                  Flexible(
+                    child: SingleChildScrollView(
+                      child: Column(
+                          children:
+                              items.map((it) => _itemRow(it)).toList()),
                     ),
-                ],
-              ),
+                  ),
+              ],
             );
-          }),
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _itemRow(Map<String, dynamic> it) {
+    final q = it['qty'];
+    final unit = '${it['unit'] ?? ''}';
+    final hasQty = q != null && '$q'.trim().isNotEmpty;
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 9),
+      decoration: const BoxDecoration(
+          border: Border(bottom: BorderSide(color: Color(0xFFeef2f7)))),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+                '${it['name'] ?? '—'}${unit.isNotEmpty ? ' · $unit' : ''}',
+                style: const TextStyle(
+                    fontWeight: FontWeight.w600, fontSize: 14)),
+          ),
+          if (hasQty)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
+              decoration: BoxDecoration(
+                  color: AppTheme.appBar,
+                  borderRadius: BorderRadius.circular(6)),
+              child: Text('×$q',
+                  textDirection: TextDirection.ltr,
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 12.5)),
+            ),
         ],
       ),
     );

@@ -313,6 +313,44 @@ class Api {
           '$_rest/driver_attendance?driver_id=eq.$driverId&date=gte.$fromDate&date=lte.$toDate&order=date.desc&limit=500&select=date,status,approved_at,ended_at',
           jwt);
 
+  // جلب أصناف الفاتورة من ويبهوك n8n (بناءً على رقم الفاتورة + الفرع)
+  static Future<List<Map<String, dynamic>>> getBillItems(
+      String billNo, String branchId) async {
+    if (billNo.trim().isEmpty) return [];
+    final res = await http.post(
+      Uri.parse('https://agent.ebrahimhamdy.com/webhook/sales_item'),
+      headers: {'Content-Type': 'application/json'},
+      body: jsonEncode({'branch_id': branchId, 'bill_no': billNo}),
+    );
+    if (res.statusCode != 200) {
+      throw Exception('HTTP ${res.statusCode}');
+    }
+    final data = jsonDecode(res.body);
+    final root = data is List ? (data.isNotEmpty ? data[0] : {}) : data;
+    final bills = (root is Map ? root['Data'] : null);
+    final list = bills is List ? bills : [];
+    Map bill = {};
+    for (final b in list) {
+      if (b is Map && '${b['bill_no']}' == billNo) {
+        bill = b;
+        break;
+      }
+    }
+    if (bill.isEmpty && list.isNotEmpty && list.first is Map) {
+      bill = list.first as Map;
+    }
+    final raw = (bill['Items'] is List) ? bill['Items'] as List : [];
+    return raw.map<Map<String, dynamic>>((it) {
+      final m = it is Map ? it : {};
+      return {
+        'name': (m['itm_name_ar'] ?? m['itm_name_en'] ?? '').toString().trim(),
+        'qty': m['itm_qty'],
+        'unit': m['unit_name'] ?? '',
+        'price': m['unit_price'],
+      };
+    }).toList();
+  }
+
   // ===== الحضور والانصراف والاستراحة =====
 
   // آخر سجل حضور (لتحديد الحالة الحالية للطيار)
