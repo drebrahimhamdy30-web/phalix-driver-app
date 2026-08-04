@@ -1147,10 +1147,9 @@ class TripsViewState extends State<TripsView> {
     final status = '${o['status']}';
     final btns = <Widget>[];
     if (status == 'assigned') {
+      // مرحلة الاستلام: استلام فقط — التعذّر بيبقى بعد ما يروح للعميل
       btns.add(_smallBtn('▶️ استلمت', const Color(0xFF0891b2),
           () => _pickupOne(id)));
-      btns.add(_smallBtn('⚠️ تعذر', const Color(0xFFdc2626),
-          () => _openFail(o)));
     } else if (status == 'picked') {
       btns.add(_smallBtn('✅ وصّلت', const Color(0xFF16a34a),
           () => _openDeliver(o)));

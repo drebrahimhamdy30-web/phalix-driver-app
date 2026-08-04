@@ -209,86 +209,16 @@ class Api {
   // بنفس منطق التوزيع الفعلي على السيرفر: الأقل طلبات / الأطول فراغًا (آخر إنهاء رحلة)
   static Future<Map<String, dynamic>?> getRank(
       String driverId, String branchId, String jwt) async {
-    if (branchId.isEmpty) return null;
+    if (branchId.isEmpty || driverId.isEmpty) return null;
     try {
-      final s = await _getList(
-          '$_rest/dispatch_settings?branch_id=eq.$branchId&select=driver_priority',
+      // الحساب اتنقل للسيرفر (RPC) — بدل تحميل مئات صفوف الحضور والطلبات
+      final res = await _getList(
+          '$_rest/rpc/get_driver_rank?p_driver=$driverId&p_branch=$branchId',
           jwt);
-      final priority =
-          s.isNotEmpty ? '${s.first['driver_priority'] ?? 'least_orders'}' : 'least_orders';
-
-      // نجيب آخر إنهاء رحلة لكل طيار (نفس القيمة اللي التوزيع بيرتّب بيها)
-      final drivers = await _getList(
-          '$_rest/drivers?branch_id=eq.$branchId&is_active=eq.true&select=id,last_completed_at',
-          jwt);
-      final ids = drivers.map((d) => '${d['id']}').toList();
-      if (ids.isEmpty) return null;
-      final lastCompleted = <String, DateTime>{};
-      for (final d in drivers) {
-        lastCompleted['${d['id']}'] =
-            DateTime.tryParse('${d['last_completed_at']}') ??
-                DateTime.fromMillisecondsSinceEpoch(0);
-      }
-
-      final att = await _getList(
-          '$_rest/driver_attendance?driver_id=in.(${ids.join(',')})&order=created_at.desc&limit=500&select=driver_id,status,created_at',
-          jwt);
-      final latest = <String, Map<String, dynamic>>{};
-      for (final r in att) {
-        latest.putIfAbsent('${r['driver_id']}', () => r);
-      }
-      final online = latest.entries
-          .where((e) => e.value['status'] == 'online')
-          .map((e) => e.key)
-          .toList();
-      if (!online.contains(driverId)) return null; // مش حاضر
-
-      // مين مش فاضي: عنده أي طلب شغّال (معيّن أو مستلم) أو على رحلة نشطة → برّه الدور
-      final orders = online.isEmpty
-          ? <dynamic>[]
-          : await _getList(
-              '$_rest/orders?status=in.(assigned,picked)&driver_id=in.(${online.join(',')})&select=driver_id',
-              jwt);
-      final trips = online.isEmpty
-          ? <dynamic>[]
-          : await _getList(
-              '$_rest/trips?status=in.(active,pending_complete)&driver_id=in.(${online.join(',')})&select=driver_id',
-              jwt);
-      final busy = <String>{};
-      for (final o in orders) busy.add('${o['driver_id']}');
-      for (final t in trips) busy.add('${t['driver_id']}');
-      final activeCount = <String, int>{}; // كل الدور فاضيين (0 طلبات)
-
-      // المتاحون فعليًا فقط (فاضيين: مفيش طلبات ولا رحلة) — دول اللي بيتحسب بينهم الدور
-      final pool = online.where((id) => !busy.contains(id)).toList();
-      if (!pool.contains(driverId)) pool.add(driverId); // اعرض له رقمًا حتى لو لسه بيخلّص
-      final total = pool.length;
-
-      DateTime idle(String id) =>
-          lastCompleted[id] ?? DateTime.fromMillisecondsSinceEpoch(0);
-      int cnt(String id) => activeCount[id] ?? 0;
-
-      int rank;
-      if (priority == 'longest_idle') {
-        final myIdle = idle(driverId);
-        // الأقدم في آخر إنهاء رحلة = الأطول فراغًا = قدّامك في الدور
-        rank = pool
-                .where((id) => id != driverId && idle(id).isBefore(myIdle))
-                .length +
-            1;
-      } else {
-        final myCount = cnt(driverId);
-        final myIdle = idle(driverId);
-        rank = pool.where((id) {
-              if (id == driverId) return false;
-              final c = cnt(id);
-              if (c < myCount) return true;
-              if (c == myCount) return idle(id).isBefore(myIdle);
-              return false;
-            }).length +
-            1;
-      }
-      return {'rank': rank, 'total': total};
+      if (res.isEmpty) return null;
+      final r = res.first;
+      if (r['rank'] == null) return null; // مش حاضر
+      return {'rank': r['rank'], 'total': r['total']};
     } catch (_) {
       return null;
     }
