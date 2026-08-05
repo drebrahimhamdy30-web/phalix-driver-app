@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'api.dart';
 import 'location.dart';
 
@@ -29,6 +31,7 @@ class AttendanceBarState extends State<AttendanceBar> {
   Timer? _timer;
   Timer? _pollTimer;
   String _timerText = '';
+  RealtimeChannel? _rankCh; // اشتراك لحظي في الدور بدل البولينج
 
   @override
   void initState() {
@@ -44,6 +47,7 @@ class AttendanceBarState extends State<AttendanceBar> {
   void dispose() {
     _timer?.cancel();
     _pollTimer?.cancel();
+    _unsubscribeRank();
     super.dispose();
   }
 
@@ -52,6 +56,47 @@ class AttendanceBarState extends State<AttendanceBar> {
     _requireApproval = s['require_approval'] == true;
     _maxBreak = (s['max_break'] is int) ? s['max_break'] as int : 15;
     await refresh();
+    _subscribeRank(); // بعد أول تحميل: اشترك لحظيًا في تغيّر الدور
+  }
+
+  // اشتراك Realtime في صف الدور الخاص بالطيار — يوصل التحديث فور تغيّره بدل البولينج
+  void _subscribeRank() {
+    _refreshRank(); // بذرة أولية للقيمة الحالية
+    try {
+      _rankCh = Supabase.instance.client
+          .channel('driver-rank-${widget.driverId}')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'driver_queue_rank',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'driver_id',
+              value: widget.driverId,
+            ),
+            callback: (payload) {
+              if (!mounted) return;
+              final rec = payload.newRecord;
+              final r = rec['rank'];
+              final t = rec['total'];
+              setState(() {
+                _rank = r is int ? r : null;
+                _rankTotal = t is int ? t : 0;
+              });
+            },
+          )
+          .subscribe();
+    } catch (_) {}
+  }
+
+  void _unsubscribeRank() {
+    final ch = _rankCh;
+    if (ch != null) {
+      try {
+        Supabase.instance.client.removeChannel(ch);
+      } catch (_) {}
+      _rankCh = null;
+    }
   }
 
   // تُستدعى من الشاشة الأم عند الرجوع للتطبيق أو التحديث
@@ -64,11 +109,10 @@ class AttendanceBarState extends State<AttendanceBar> {
       _loading = false;
     });
     _setupTimer();
-    // الدور/الترتيب ثقيل (٤-٥ نداءات) وثانوي → بالخلفية من غير ما يأخّر ظهور الحالة
-    _refreshRank();
+    // الدور بقى يوصل لحظيًا عبر Realtime (مش بولينج) — البذرة الأولية في _subscribeRank
   }
 
-  // جلب دور الطيار في الخلفية (لا يمنع عرض حالة الحضور)
+  // جلب دور الطيار (بذرة أولية فقط عند فتح الشاشة؛ التحديثات بعدها عبر Realtime)
   Future<void> _refreshRank() async {
     try {
       final rank =
@@ -175,6 +219,13 @@ class AttendanceBarState extends State<AttendanceBar> {
       final ok = await Api.requestAttendance(
           widget.driverId, type, _requireApproval, widget.jwt);
       if (ok && mounted) {
+        // توفير النت: نُعلِم خدمة الخلفية بحالة الشيفت — online = بولينج سريع، offline = بطيء
+        if (type == 'online' || type == 'offline') {
+          try {
+            await FlutterForegroundTask.saveData(
+                key: 'shift_active', value: type == 'online');
+          } catch (_) {}
+        }
         // تفاؤلي: اعرض الحالة الجديدة فورًا (بانتظار موافقة/حاضر) من غير ما
         // نستنى التحديث الكامل — والمزامنة تصحّح أي فرق بالخلفية
         final nowIso = DateTime.now().toUtc().toIso8601String();

@@ -106,6 +106,15 @@ class Api {
     return [];
   }
 
+  // أعمدة الطلب المطلوبة فقط (بدل select=* الذي يجلب عمود source_data الضخم غير المستخدم — توفير نت)
+  static const String _orderCols =
+      'id,bill_no,cust_code,customer_name,cust_name,customer_address,cust_address,'
+      'customer_phone,cust_phone,cust_region,total_bill_net,status,payment_method,'
+      'count_of_items,collected_amount,collected_approved,notes,staff_notes,driver_notes,'
+      'assigned_at,picked_at,delivered_at,created_at,updated_at,bill_date,last_activated_at,'
+      'perf_rating,actual_minutes,expected_minutes,distance_meters,current_customer_balance,'
+      'postpone_reason,attempt_count,driver_id,deliveryman,branch_id';
+
   // تحميل لوحة الطيار: الرحلة الجارية + آخر 3 رحلات + طلباتها (مُحسّن: نداءات أقل)
   static Future<Map<String, dynamic>> loadBoard(
       String driverId, String? branchId, String jwt) async {
@@ -145,7 +154,7 @@ class Api {
       }
       if (allIds.isNotEmpty) {
         final orders = await _getList(
-            '$_rest/orders?id=in.(${allIds.join(',')})&select=*', jwt);
+            '$_rest/orders?id=in.(${allIds.join(',')})&select=$_orderCols', jwt);
         final byId = {for (final o in orders) '${o['id']}': o};
         for (final tid in byTrip.keys) {
           tripOrders[tid] = byTrip[tid]!
@@ -159,7 +168,7 @@ class Api {
     // طلبات مباشرة (بدون رحلة) لو مفيش رحلة جارية
     if (active.isEmpty) {
       final direct = await _getList(
-          '$_rest/orders?driver_id=eq.$driverId&status=in.(assigned,picked)&select=*',
+          '$_rest/orders?driver_id=eq.$driverId&status=in.(assigned,picked)&select=$_orderCols',
           jwt);
       if (direct.isNotEmpty) {
         board.insert(0, {

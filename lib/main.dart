@@ -223,11 +223,28 @@ class AlarmTaskHandler extends TaskHandler {
     await _report('start', {'v': Config.appVersion, 'driver_id': _driverId});
   }
 
+  int _tick = 0;
+
   @override
   void onRepeatEvent(DateTime timestamp) {
+    _handleTick();
+  }
+
+  // توفير النت: لما الطيار مش في شيفت (offline) نقلّل البولينج لكل 6 تِكّات (~دقيقة)
+  // بدل كل 10 ثواني. لما يكون في شيفت (online) يفضل سريع زي ما هو.
+  Future<void> _handleTick() async {
     if (_busy || _driverId.isEmpty) return;
     _busy = true;
-    _poll().whenComplete(() => _busy = false);
+    try {
+      _tick++;
+      final shiftActive =
+          (await FlutterForegroundTask.getData<bool>(key: 'shift_active')) ??
+              true;
+      if (!shiftActive && (_tick % 6 != 0)) return;
+      await _poll();
+    } finally {
+      _busy = false;
+    }
   }
 
   Future<void> _poll() async {
