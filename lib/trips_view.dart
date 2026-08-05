@@ -783,7 +783,7 @@ class TripsViewState extends State<TripsView> {
         borderRadius: BorderRadius.circular(12),
         side: late
             ? const BorderSide(color: Color(0xFFdc2626), width: 1.8)
-            : const BorderSide(color: Color(0xFFcbd5e1), width: 1.2),
+            : const BorderSide(color: Color(0xFF64748b), width: 1.5),
       ),
       child: Column(
         children: [
@@ -1180,7 +1180,10 @@ class TripsViewState extends State<TripsView> {
           style: ElevatedButton.styleFrom(
               backgroundColor: c,
               foregroundColor: Colors.white,
-              padding: EdgeInsets.zero),
+              padding: EdgeInsets.zero,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8))),
           child: Text(t,
               style:
                   const TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),

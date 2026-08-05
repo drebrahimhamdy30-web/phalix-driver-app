@@ -270,7 +270,9 @@ class AttendanceBarState extends State<AttendanceBar> {
 
     late Color bg, dot;
     late String label;
-    List<Widget> actions = [];
+    // إجراءات الحضور/الانصراف/الاستراحة بقت جوه قايمة الـ3 نقط (⋮)
+    // عشان الطيار ما يضغطش عليها بالغلط وهو شغال
+    final List<PopupMenuEntry<String>> menuItems = [];
 
     if (isPending) {
       bg = const Color(0xFFfef9c3);
@@ -280,28 +282,22 @@ class AttendanceBarState extends State<AttendanceBar> {
       bg = const Color(0xFFdcfce7);
       dot = const Color(0xFF16a34a);
       label = 'حاضر — جاهز للعمل';
-      actions = [
-        _squareBtn(Icons.free_breakfast, const Color(0xFFca8a04), 'استراحة',
-            () => _request('break')),
-        _squareBtn(Icons.logout, const Color(0xFFdc2626), 'انصراف',
-            () => _request('offline')),
-      ];
+      menuItems.add(_menuItem('break', Icons.free_breakfast,
+          const Color(0xFFca8a04), 'طلب استراحة'));
+      menuItems.add(_menuItem(
+          'offline', Icons.logout, const Color(0xFFdc2626), 'طلب انصراف'));
     } else if (st == 'break') {
       bg = const Color(0xFFfef9c3);
       dot = const Color(0xFFca8a04);
       label = 'في استراحة';
-      actions = [
-        _squareBtn(Icons.play_arrow, const Color(0xFF16a34a),
-            'إنهاء الاستراحة', _endBreakManual),
-      ];
+      menuItems.add(_menuItem('end_break', Icons.play_arrow,
+          const Color(0xFF16a34a), 'إنهاء الاستراحة'));
     } else {
       bg = const Color(0xFFf1f5f9);
       dot = const Color(0xFF94a3b8);
       label = 'غير حاضر — اطلب الحضور';
-      actions = [
-        _squareBtn(Icons.login, const Color(0xFF16a34a), 'طلب الحضور',
-            () => _request('online')),
-      ];
+      menuItems.add(_menuItem(
+          'online', Icons.login, const Color(0xFF16a34a), 'طلب الحضور'));
     }
 
     // كله في سطر واحد مرتّب: الحالة يمين — والأزرار المربعة والدور شمال
@@ -334,7 +330,6 @@ class AttendanceBarState extends State<AttendanceBar> {
                         ? const Color(0xFFb45309)
                         : const Color(0xFF15803d))),
           ],
-          for (final a in actions) ...[const SizedBox(width: 6), a],
           if (_rank != null) ...[const SizedBox(width: 6), _rankChip()],
           if (_busy) ...[
             const SizedBox(width: 8),
@@ -342,6 +337,26 @@ class AttendanceBarState extends State<AttendanceBar> {
                 width: 14,
                 height: 14,
                 child: CircularProgressIndicator(strokeWidth: 2)),
+          ],
+          // زر الـ3 نقط — بيفتح قايمة إجراءات الحضور/الاستراحة/الانصراف
+          if (menuItems.isNotEmpty) ...[
+            const SizedBox(width: 2),
+            PopupMenuButton<String>(
+              enabled: !_busy,
+              icon: const Icon(Icons.more_vert, size: 24, color: Color(0xFF334155)),
+              tooltip: 'إجراءات',
+              padding: EdgeInsets.zero,
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10)),
+              onSelected: (v) {
+                if (v == 'end_break') {
+                  _endBreakManual();
+                } else {
+                  _request(v);
+                }
+              },
+              itemBuilder: (_) => menuItems,
+            ),
           ],
         ],
       ),
@@ -372,25 +387,19 @@ class AttendanceBarState extends State<AttendanceBar> {
     );
   }
 
-  // زر مربّع صغير بأيقونة (مع tooltip للاسم) — يقعد جنب الدور في نفس السطر
-  Widget _squareBtn(
-      IconData icon, Color color, String tip, VoidCallback onTap) {
-    return Tooltip(
-      message: tip,
-      child: SizedBox(
-        width: 38,
-        height: 38,
-        child: ElevatedButton(
-          onPressed: _busy ? null : onTap,
-          style: ElevatedButton.styleFrom(
-              backgroundColor: color,
-              foregroundColor: Colors.white,
-              padding: EdgeInsets.zero,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(9)),
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap),
-          child: Icon(icon, size: 19),
-        ),
+  // عنصر داخل قايمة الـ3 نقط: أيقونة ملوّنة + نص الإجراء
+  PopupMenuItem<String> _menuItem(
+      String value, IconData icon, Color color, String label) {
+    return PopupMenuItem<String>(
+      value: value,
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: color),
+          const SizedBox(width: 10),
+          Text(label,
+              style: const TextStyle(
+                  fontWeight: FontWeight.w700, fontSize: 14)),
+        ],
       ),
     );
   }
