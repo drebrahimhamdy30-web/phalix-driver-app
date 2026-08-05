@@ -106,14 +106,17 @@ class Api {
     return [];
   }
 
-  // أعمدة الطلب المطلوبة فقط (بدل select=* الذي يجلب عمود source_data الضخم غير المستخدم — توفير نت)
+  // أعمدة حقيقية فقط من جدول orders (نُسقِط source_data/route_polyline/items الثقيلة غير المستخدمة — توفير نت)
+  // مهم: كل اسم هنا لازم يكون عمود موجود فعلاً، وإلا PostgREST يرفض الاستعلام ويرجّع فاضي.
   static const String _orderCols =
-      'id,bill_no,cust_code,customer_name,cust_name,customer_address,cust_address,'
-      'customer_phone,cust_phone,cust_region,total_bill_net,status,payment_method,'
-      'count_of_items,collected_amount,collected_approved,notes,staff_notes,driver_notes,'
-      'assigned_at,picked_at,delivered_at,created_at,updated_at,bill_date,last_activated_at,'
-      'perf_rating,actual_minutes,expected_minutes,distance_meters,current_customer_balance,'
-      'postpone_reason,attempt_count,driver_id,deliveryman,branch_id';
+      'id,customer_name,customer_phone,customer_address,branch_id,amount,status,notes,'
+      'created_at,updated_at,bill_no,bill_type,bill_status,cust_code,total_bill_net,'
+      'additional_expenses,count_of_items,current_customer_balance,cust_region,deliveryman,'
+      'employee_name,money_with_deliveryman,bill_date,picked_at,delivered_at,payment_method,'
+      'driver_notes,staff_notes,postpone_reason,cancelled_reason,attempt_count,collected_amount,'
+      'driver_id,assigned_at,completed_at,postpone_time,last_activated_at,collected_approved,'
+      'delivery_lat,delivery_lng,expected_minutes,actual_minutes,perf_rating,distance_meters,'
+      'dispatch_type';
 
   // تحميل لوحة الطيار: الرحلة الجارية + آخر 3 رحلات + طلباتها (مُحسّن: نداءات أقل)
   static Future<Map<String, dynamic>> loadBoard(
