@@ -277,7 +277,16 @@ class AttendanceBarState extends State<AttendanceBar> {
     if (isPending) {
       bg = const Color(0xFFfef9c3);
       dot = const Color(0xFFca8a04);
-      label = 'بانتظار موافقة الإدارة';
+      if (st == 'break_request') {
+        // طلب استراحة قيد الموافقة → الطيار لسه بيستلم طلبات عادي
+        bg = const Color(0xFFdcfce7);
+        dot = const Color(0xFF16a34a);
+        label = 'طلب استراحة — لسه بتستلم لحد الموافقة';
+      } else if (st == 'offline_request') {
+        label = 'طلب انصراف — بانتظار الموافقة';
+      } else {
+        label = 'طلب حضور — بانتظار الموافقة';
+      }
     } else if (st == 'online') {
       bg = const Color(0xFFdcfce7);
       dot = const Color(0xFF16a34a);
