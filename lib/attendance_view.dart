@@ -100,7 +100,7 @@ class AttendanceBarState extends State<AttendanceBar> {
   }
 
   // تُستدعى من الشاشة الأم عند الرجوع للتطبيق أو التحديث
-  Future<void> refresh() async {
+  Future<void> refresh({bool reseedRank = false}) async {
     // الحالة (حاضر/استراحة/بانتظار) خفيفة → نجيبها ونعرضها فورًا
     final rec = await Api.getLatestAttendance(widget.driverId, widget.jwt);
     if (!mounted) return;
@@ -109,9 +109,10 @@ class AttendanceBarState extends State<AttendanceBar> {
       _loading = false;
     });
     _setupTimer();
-    // إعادة جلب الدور من السيرفر كمان — يعالج فوات تحديث Realtime وقت ما التطبيق في الخلفية
-    // (Realtime للحظية، وده شبكة أمان تصحّح ذاتيًا كل بولينج/رجوع للتطبيق)
-    await _refreshRank();
+    // إعادة جلب الدور من السيرفر عند الرجوع للتطبيق أو التحديث اليدوي فقط (مش في بولينج الـ30ث)
+    // عشان نعالج فوات تحديث Realtime وقت الخلفية من غير ما نزوّد استهلاك الباقة.
+    // (Realtime بيغطّي اللحظية وهو مفتوح؛ الفلترة شغّالة لأن المفتاح driver_id + replica identity FULL)
+    if (reseedRank) await _refreshRank();
   }
 
   // جلب دور الطيار (بذرة أولية فقط عند فتح الشاشة؛ التحديثات بعدها عبر Realtime)

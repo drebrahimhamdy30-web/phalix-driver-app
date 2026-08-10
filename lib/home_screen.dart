@@ -61,7 +61,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       _stopAlarms();
       _tripsKey.currentState?.load();
       _prevKey.currentState?.load();
-      _attKey.currentState?.refresh();
+      _attKey.currentState?.refresh(reseedRank: true);
     }
   }
 
@@ -422,7 +422,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void _refreshCurrent() {
     _tripsKey.currentState?.load();
     _prevKey.currentState?.load();
-    _attKey.currentState?.refresh();
+    _attKey.currentState?.refresh(reseedRank: true);
   }
 
   @override
