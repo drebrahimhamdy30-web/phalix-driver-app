@@ -377,8 +377,7 @@ class AttendanceBarState extends State<AttendanceBar> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(_rankTotal > 0 ? 'دورك/$_rankTotal' : 'دورك',
-              style: TextStyle(fontSize: 9, color: c)),
+          Text('دورك', style: TextStyle(fontSize: 9, color: c)),
           Text('#$r',
               style: TextStyle(
                   fontSize: 14, fontWeight: FontWeight.bold, color: c)),

@@ -32,7 +32,7 @@ class Api {
   // جلب بيانات السائق (uuid + الاسم) من رقم مستخدمه
   static Future<Map<String, dynamic>?> getDriver(int userId, String jwt) async {
     final url =
-        '${Config.supabaseUrl}/rest/v1/drivers?branch_user_id=eq.$userId&select=id,full_name,is_online,branch_id&limit=1';
+        '${Config.supabaseUrl}/rest/v1/drivers?branch_user_id=eq.$userId&select=id,full_name,is_online,branch_id,avatar&limit=1';
     final res = await http.get(Uri.parse(url), headers: _headers(jwt));
     if (res.statusCode == 200) {
       final list = jsonDecode(res.body) as List;
@@ -68,7 +68,7 @@ class Api {
     final url =
         '${Config.supabaseUrl}/rest/v1/orders?driver_id=eq.$driverId'
         '&status=in.(assigned,picked,failed)'
-        '&select=id,bill_no,customer_name,customer_phone,customer_address,cust_region,total_bill_net,status'
+        '&select=id,bill_no,customer_name,customer_phone,customer_address,cust_region,total_bill_net,status,driver_message,driver_message_seen_at'
         '&order=assigned_at.desc';
     try {
       final res = await http
@@ -116,7 +116,7 @@ class Api {
       'driver_notes,staff_notes,postpone_reason,cancelled_reason,attempt_count,collected_amount,'
       'driver_id,assigned_at,completed_at,postpone_time,last_activated_at,collected_approved,'
       'delivery_lat,delivery_lng,expected_minutes,actual_minutes,perf_rating,distance_meters,'
-      'dispatch_type';
+      'dispatch_type,driver_message,driver_message_seen_at';
 
   // تحميل لوحة الطيار: الرحلة الجارية + آخر 3 رحلات + طلباتها (مُحسّن: نداءات أقل)
   static Future<Map<String, dynamic>> loadBoard(
@@ -610,6 +610,32 @@ class Api {
   static Future<bool> updateTrip(
           String id, Map<String, dynamic> body, String jwt) =>
       _patch('$_rest/trips?id=eq.$id', body, jwt);
+
+  // حفظ صورة/رمز الطيار (عبر RPC يتجاوز RLS)
+  static Future<bool> setAvatar(String driverId, String? avatar, String jwt) =>
+      _post('$_rest/rpc/set_driver_avatar',
+          {'p_driver_id': driverId, 'p_avatar': avatar}, jwt);
+
+  // جلب صورة/رمز الطيار الحالية
+  static Future<String?> getAvatar(String driverId, String jwt) async {
+    try {
+      final res = await http
+          .get(Uri.parse('$_rest/drivers?id=eq.$driverId&select=avatar&limit=1'),
+              headers: _headers(jwt))
+          .timeout(const Duration(seconds: 8));
+      if (res.statusCode == 200) {
+        final list = jsonDecode(res.body) as List;
+        if (list.isNotEmpty) return list.first['avatar'] as String?;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  // تعليم رسالة الإدارة على الطلب كمقروءة
+  static Future<bool> markMessageSeen(String orderId, String jwt) => _patch(
+      '$_rest/orders?id=eq.$orderId',
+      {'driver_message_seen_at': _now()},
+      jwt);
 
   static Future<void> releaseFailed(List<String> ids, String jwt) async {
     if (ids.isEmpty) return;

@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ota_update/ota_update.dart';
@@ -23,6 +25,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   String _driverId = '';
   String _branchId = '';
   String _jwt = '';
+  String _avatar = '';
   bool _ready = false;
   int _maxBreak = 15;
   int _tab = 0;
@@ -69,6 +72,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     _branchId = prefs.getString('branch_id') ?? '';
     _jwt = prefs.getString('jwt') ?? '';
     if (mounted) setState(() => _ready = true);
+    // صورة/رمز الطيار
+    try {
+      if (_driverId.isNotEmpty) {
+        final av = await Api.getAvatar(_driverId, _jwt);
+        if (mounted) setState(() => _avatar = av ?? '');
+      }
+    } catch (_) {}
     // اشترك في قناة الموقع عشان ترد على طلب "موقع الطيار الحالي" من الإدارة
     try {
       if (_driverId.isNotEmpty) _locResponder.start(_driverId);
@@ -92,6 +102,126 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void _snack(String m) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(m)));
+  }
+
+  // دايرة صورة/رمز الطيار (صورة → data/URL، رمز → إيموجي، غير ذلك → الحروف)
+  Widget _avatarWidget(String av, String name, double size) {
+    final parts = name.trim().split(' ').where((w) => w.isNotEmpty).toList();
+    final ini = parts.isEmpty ? '?' : parts.take(2).map((w) => w[0]).join();
+    final isImg = av.startsWith('data:') || av.startsWith('http');
+    if (isImg) {
+      ImageProvider? img;
+      if (av.startsWith('data:')) {
+        try {
+          img = MemoryImage(base64Decode(av.split(',').last));
+        } catch (_) {}
+      } else {
+        img = NetworkImage(av);
+      }
+      if (img != null) {
+        return CircleAvatar(radius: size / 2, backgroundImage: img);
+      }
+    }
+    return CircleAvatar(
+      radius: size / 2,
+      backgroundColor: const Color(0xFF64748b),
+      child: Text(av.isNotEmpty && !isImg ? av : ini,
+          style: TextStyle(
+              color: Colors.white,
+              fontSize: size * 0.42,
+              fontWeight: FontWeight.bold)),
+    );
+  }
+
+  Future<void> _openAvatar() async {
+    const emojis = [
+      '🛵', '🏍️', '🚗', '🚴', '🧑', '👨', '👩', '🧔', '😎',
+      '🧢', '⭐', '🔥', '🚀', '🐎', '⚡', '🦅', '🏆', '👍'
+    ];
+    String val = _avatar;
+    final picker = ImagePicker();
+    final result = await showDialog<String?>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) => AlertDialog(
+          title: const Text('🖼️ صورتك في التوزيع'),
+          content: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              _avatarWidget(val, _name, 84),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    try {
+                      final x = await picker.pickImage(
+                          source: ImageSource.gallery,
+                          maxWidth: 96,
+                          maxHeight: 96,
+                          imageQuality: 70);
+                      if (x != null) {
+                        final bytes = await x.readAsBytes();
+                        val = 'data:image/jpeg;base64,${base64Encode(bytes)}';
+                        setD(() {});
+                      }
+                    } catch (_) {}
+                  },
+                  icon: const Icon(Icons.photo),
+                  label: const Text('ارفع صورة'),
+                ),
+              ),
+              const SizedBox(height: 10),
+              const Align(
+                  alignment: Alignment.centerRight,
+                  child: Text('أو اختر رمز',
+                      style: TextStyle(fontSize: 12, color: Colors.grey))),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: emojis
+                    .map((e) => InkWell(
+                          onTap: () {
+                            val = e;
+                            setD(() {});
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                                border: Border.all(color: Colors.black12),
+                                borderRadius: BorderRadius.circular(8)),
+                            child:
+                                Text(e, style: const TextStyle(fontSize: 24)),
+                          ),
+                        ))
+                    .toList(),
+              ),
+            ]),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, '__clear__'),
+                child: const Text('مسح')),
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, null),
+                child: const Text('إلغاء')),
+            ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, val),
+                child: const Text('حفظ')),
+          ],
+        ),
+      ),
+    );
+    if (result == null) return;
+    final newVal = result == '__clear__' ? '' : result;
+    final ok =
+        await Api.setAvatar(_driverId, newVal.isEmpty ? null : newVal, _jwt);
+    if (!mounted) return;
+    if (ok) {
+      setState(() => _avatar = newVal);
+    } else {
+      _snack('تعذّر حفظ الصورة');
+    }
   }
 
   Future<void> _checkUpdate({bool manual = false}) async {
@@ -302,6 +432,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       appBar: AppBar(
         backgroundColor: AppTheme.appBar,
         foregroundColor: AppTheme.onAppBar,
+        leading: Padding(
+          padding: const EdgeInsets.only(right: 4, left: 8),
+          child: GestureDetector(
+            onTap: _openAvatar,
+            child: _avatarWidget(_avatar, _name, 36),
+          ),
+        ),
         title: Text('أهلاً $_name · ${Config.appVersion}',
             style: const TextStyle(fontSize: 14)),
         actions: [

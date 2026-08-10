@@ -930,6 +930,9 @@ class TripsViewState extends State<TripsView> {
             _note('🚨 طلب عاجل', const Color(0xFFdc2626)),
           if (staffNotes != null && '$staffNotes'.isNotEmpty)
             _note('💼 $staffNotes', const Color(0xFF7c3aed)),
+          if (o['driver_message'] != null && '${o['driver_message']}'.isNotEmpty)
+            _note('✉️ رسالة من الإدارة: ${o['driver_message']}',
+                const Color(0xFF1e40af)),
           if (status == 'failed' && failReason != null)
             _note('⚠️ تعذر: $failReason', const Color(0xFFdc2626)),
           _phoneButtons(o),
@@ -1296,6 +1299,25 @@ class TripsViewState extends State<TripsView> {
   // ============ نوافذ الأزرار ============
   Future<void> _openDeliver(Map<String, dynamic> o) async {
     final id = '${o['id']}';
+    // رسالة الإدارة المربوطة بالطلب — تظهر إجبارياً قبل التسليم لو الطيار مشافهاش
+    final dmsg = '${o['driver_message'] ?? ''}';
+    if (dmsg.isNotEmpty && o['driver_message_seen_at'] == null) {
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('✉️ رسالة من الإدارة'),
+          content: Text(dmsg),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('تمام')),
+          ],
+        ),
+      );
+      o['driver_message_seen_at'] = DateTime.now().toUtc().toIso8601String();
+      unawaited(Api.markMessageSeen(id, widget.jwt));
+      if (!mounted) return;
+    }
     String pay = '${o['payment_method'] ?? 'cash'}';
     final num billNum = (o['total_bill_net'] is num)
         ? o['total_bill_net'] as num
