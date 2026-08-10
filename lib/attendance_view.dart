@@ -109,7 +109,9 @@ class AttendanceBarState extends State<AttendanceBar> {
       _loading = false;
     });
     _setupTimer();
-    // الدور بقى يوصل لحظيًا عبر Realtime (مش بولينج) — البذرة الأولية في _subscribeRank
+    // إعادة جلب الدور من السيرفر كمان — يعالج فوات تحديث Realtime وقت ما التطبيق في الخلفية
+    // (Realtime للحظية، وده شبكة أمان تصحّح ذاتيًا كل بولينج/رجوع للتطبيق)
+    await _refreshRank();
   }
 
   // جلب دور الطيار (بذرة أولية فقط عند فتح الشاشة؛ التحديثات بعدها عبر Realtime)
