@@ -273,10 +273,7 @@ class AttendanceBarState extends State<AttendanceBar> {
 
     late Color bg, dot;
     late String label;
-    // إجراءات الحضور/الانصراف/الاستراحة بقت جوه قايمة الـ3 نقط (⋮)
-    // عشان الطيار ما يضغطش عليها بالغلط وهو شغال
-    final List<PopupMenuEntry<String>> menuItems = [];
-
+    // إجراءات الحضور/الانصراف/الاستراحة اتنقلت لقايمة النقط الموحّدة فوق (في الـ AppBar)
     if (isPending) {
       bg = const Color(0xFFfef9c3);
       dot = const Color(0xFFca8a04);
@@ -285,22 +282,14 @@ class AttendanceBarState extends State<AttendanceBar> {
       bg = const Color(0xFFdcfce7);
       dot = const Color(0xFF16a34a);
       label = 'حاضر — جاهز للعمل';
-      menuItems.add(_menuItem('break', Icons.free_breakfast,
-          const Color(0xFFca8a04), 'طلب استراحة'));
-      menuItems.add(_menuItem(
-          'offline', Icons.logout, const Color(0xFFdc2626), 'طلب انصراف'));
     } else if (st == 'break') {
       bg = const Color(0xFFfef9c3);
       dot = const Color(0xFFca8a04);
       label = 'في استراحة';
-      menuItems.add(_menuItem('end_break', Icons.play_arrow,
-          const Color(0xFF16a34a), 'إنهاء الاستراحة'));
     } else {
       bg = const Color(0xFFf1f5f9);
       dot = const Color(0xFF94a3b8);
       label = 'غير حاضر — اطلب الحضور';
-      menuItems.add(_menuItem(
-          'online', Icons.login, const Color(0xFF16a34a), 'طلب الحضور'));
     }
 
     // كله في سطر واحد مرتّب: الحالة يمين — والأزرار المربعة والدور شمال
@@ -341,29 +330,41 @@ class AttendanceBarState extends State<AttendanceBar> {
                 height: 14,
                 child: CircularProgressIndicator(strokeWidth: 2)),
           ],
-          // زر الـ3 نقط — بيفتح قايمة إجراءات الحضور/الاستراحة/الانصراف
-          if (menuItems.isNotEmpty) ...[
-            const SizedBox(width: 2),
-            PopupMenuButton<String>(
-              enabled: !_busy,
-              icon: const Icon(Icons.more_vert, size: 24, color: Color(0xFF334155)),
-              tooltip: 'إجراءات',
-              padding: EdgeInsets.zero,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10)),
-              onSelected: (v) {
-                if (v == 'end_break') {
-                  _endBreakManual();
-                } else {
-                  _request(v);
-                }
-              },
-              itemBuilder: (_) => menuItems,
-            ),
-          ],
         ],
       ),
     );
+  }
+
+  // ===== واجهة عامة تستخدمها القايمة الموحّدة في الأعلى (home_screen) =====
+  bool get busy => _busy;
+
+  List<Map<String, dynamic>> attendanceActions() {
+    if (_loading) return [];
+    final st = _status();
+    if (st.endsWith('_request')) return []; // بانتظار موافقة الإدارة — لا إجراءات
+    if (st == 'online') {
+      return [
+        {'v': 'break', 'icon': Icons.free_breakfast, 'color': const Color(0xFFca8a04), 'label': 'طلب استراحة'},
+        {'v': 'offline', 'icon': Icons.logout, 'color': const Color(0xFFdc2626), 'label': 'طلب انصراف'},
+      ];
+    } else if (st == 'break') {
+      return [
+        {'v': 'end_break', 'icon': Icons.play_arrow, 'color': const Color(0xFF16a34a), 'label': 'إنهاء الاستراحة'},
+      ];
+    } else {
+      return [
+        {'v': 'online', 'icon': Icons.login, 'color': const Color(0xFF16a34a), 'label': 'طلب الحضور'},
+      ];
+    }
+  }
+
+  void runAttendanceAction(String v) {
+    if (_busy) return;
+    if (v == 'end_break') {
+      _endBreakManual();
+    } else {
+      _request(v);
+    }
   }
 
   Widget _rankChip() {
@@ -389,20 +390,4 @@ class AttendanceBarState extends State<AttendanceBar> {
     );
   }
 
-  // عنصر داخل قايمة الـ3 نقط: أيقونة ملوّنة + نص الإجراء
-  PopupMenuItem<String> _menuItem(
-      String value, IconData icon, Color color, String label) {
-    return PopupMenuItem<String>(
-      value: value,
-      child: Row(
-        children: [
-          Icon(icon, size: 20, color: color),
-          const SizedBox(width: 10),
-          Text(label,
-              style: const TextStyle(
-                  fontWeight: FontWeight.w700, fontSize: 14)),
-        ],
-      ),
-    );
-  }
 }

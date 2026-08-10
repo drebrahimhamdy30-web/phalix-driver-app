@@ -19,6 +19,10 @@ class Config {
   static const String loginUrl =
       'https://agent.ebrahimhamdy.com/webhook/login';
 
+  // webhook طلب كود استعادة كلمة السر (يبعت كود 6 أرقام على إيميل الطيار)
+  static const String forgotPasswordUrl =
+      'https://agent.ebrahimhamdy.com/webhook/forgot_password';
+
   // webhook فحص طلبات الرحلة السابقة على نظام الصيدلية (B Connect)
   static const String checkPrevTripUrl =
       'https://agent.ebrahimhamdy.com/webhook/check_prev_trip';

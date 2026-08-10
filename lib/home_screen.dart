@@ -447,15 +447,42 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
                 onPressed: _refreshCurrent, icon: const Icon(Icons.refresh)),
           PopupMenuButton<String>(
             onSelected: (v) {
-              if (v == 'upd') _checkUpdate(manual: true);
-              if (v == 'pw') _changePassword();
-              if (v == 'out') _logout();
+              if (v == 'upd') {
+                _checkUpdate(manual: true);
+              } else if (v == 'pw') {
+                _changePassword();
+              } else if (v == 'out') {
+                _logout();
+              } else {
+                // إجراءات الحضور/الانصراف/الاستراحة (اتوحّدت هنا)
+                _attKey.currentState?.runAttendanceAction(v);
+              }
             },
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'upd', child: Text('🔄 التحقق من التحديثات')),
-              PopupMenuItem(value: 'pw', child: Text('🔑 تغيير كلمة المرور')),
-              PopupMenuItem(value: 'out', child: Text('🚪 تسجيل الخروج')),
-            ],
+            itemBuilder: (_) {
+              final items = <PopupMenuEntry<String>>[];
+              final actions = _attKey.currentState?.attendanceActions() ?? [];
+              for (final a in actions) {
+                items.add(PopupMenuItem<String>(
+                  value: a['v'] as String,
+                  child: Row(children: [
+                    Icon(a['icon'] as IconData,
+                        size: 20, color: a['color'] as Color),
+                    const SizedBox(width: 10),
+                    Text(a['label'] as String,
+                        style: const TextStyle(
+                            fontWeight: FontWeight.w700, fontSize: 14)),
+                  ]),
+                ));
+              }
+              if (items.isNotEmpty) items.add(const PopupMenuDivider());
+              items.add(const PopupMenuItem(
+                  value: 'upd', child: Text('🔄 التحقق من التحديثات')));
+              items.add(const PopupMenuItem(
+                  value: 'pw', child: Text('🔑 تغيير كلمة المرور')));
+              items.add(const PopupMenuItem(
+                  value: 'out', child: Text('🚪 تسجيل الخروج')));
+              return items;
+            },
           ),
         ],
       ),

@@ -10,6 +10,36 @@ class Api {
         'Content-Type': 'application/json',
       };
 
+  // طلب كود استعادة كلمة السر — يبعت للـ n8n اللي يبعت الكود على إيميل الطيار
+  static Future<void> requestPasswordReset(String login) async {
+    try {
+      await http
+          .post(Uri.parse(Config.forgotPasswordUrl),
+              headers: {'Content-Type': 'application/json'},
+              body: jsonEncode({'login': login}))
+          .timeout(const Duration(seconds: 15));
+    } catch (_) {}
+  }
+
+  // تعيين كلمة سر جديدة بالكود (RPC عام anon)
+  static Future<Map<String, dynamic>> resetPasswordWithCode(
+      String login, String code, String newPassword) async {
+    try {
+      final res = await http
+          .post(Uri.parse('$_rest/rpc/reset_password_with_code'),
+              headers: _headers(null),
+              body: jsonEncode({
+                'p_login': login,
+                'p_code': code,
+                'p_new_password': newPassword
+              }))
+          .timeout(const Duration(seconds: 15));
+      final data = jsonDecode(res.body);
+      if (data is Map) return Map<String, dynamic>.from(data);
+    } catch (_) {}
+    return {'success': false, 'error': 'تعذّر الاتصال بالخادم'};
+  }
+
   // تسجيل الدخول عبر n8n
   static Future<Map<String, dynamic>?> login(String user, String pass) async {
     try {

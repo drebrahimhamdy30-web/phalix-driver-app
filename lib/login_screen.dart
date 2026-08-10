@@ -61,6 +61,122 @@ class _LoginScreenState extends State<LoginScreen> {
         context, MaterialPageRoute(builder: (_) => const HomeScreen()));
   }
 
+  // نسيت كلمة السر: خطوة 1 اسم/إيميل → إرسال كود، خطوة 2 كود + كلمة سر جديدة
+  Future<void> _forgotPassword() async {
+    final loginCtrl = TextEditingController(text: _user.text.trim());
+    final login = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('استعادة كلمة السر'),
+        content: Column(mainAxisSize: MainAxisSize.min, children: [
+          const Text(
+              'اكتب اسم المستخدم أو الإيميل المسجّل، وهنبعتلك كود على إيميلك.',
+              style: TextStyle(fontSize: 13)),
+          const SizedBox(height: 10),
+          TextField(
+              controller: loginCtrl,
+              decoration: const InputDecoration(
+                  labelText: 'اسم المستخدم / الإيميل',
+                  border: OutlineInputBorder())),
+        ]),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('إلغاء')),
+          ElevatedButton(
+              onPressed: () => Navigator.pop(ctx, loginCtrl.text.trim()),
+              child: const Text('إرسال الكود')),
+        ],
+      ),
+    );
+    if (login == null || login.isEmpty) return;
+    await Api.requestPasswordReset(login);
+    if (!mounted) return;
+
+    final codeCtrl = TextEditingController();
+    final p1 = TextEditingController();
+    final p2 = TextEditingController();
+    String? err;
+    final done = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setD) => AlertDialog(
+          title: const Text('تعيين كلمة سر جديدة'),
+          content: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              const Text(
+                  'لو الحساب موجود، وصلك كود من 6 أرقام على إيميلك (صالح 15 دقيقة). راجع الـSpam كمان.',
+                  style: TextStyle(fontSize: 13)),
+              const SizedBox(height: 10),
+              TextField(
+                  controller: codeCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                      labelText: 'الكود (6 أرقام)',
+                      border: OutlineInputBorder())),
+              const SizedBox(height: 10),
+              TextField(
+                  controller: p1,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                      labelText: 'كلمة السر الجديدة',
+                      border: OutlineInputBorder())),
+              const SizedBox(height: 10),
+              TextField(
+                  controller: p2,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                      labelText: 'تأكيد كلمة السر',
+                      border: OutlineInputBorder())),
+              if (err != null)
+                Padding(
+                    padding: const EdgeInsets.only(top: 10),
+                    child: Text(err!,
+                        style: const TextStyle(
+                            color: Colors.red, fontSize: 13))),
+            ]),
+          ),
+          actions: [
+            TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('إلغاء')),
+            ElevatedButton(
+                onPressed: () async {
+                  final code = codeCtrl.text.trim();
+                  if (code.length != 6 ||
+                      int.tryParse(code) == null) {
+                    setD(() => err = 'اكتب الكود المكوّن من 6 أرقام');
+                    return;
+                  }
+                  if (p1.text.length < 6) {
+                    setD(() => err = 'كلمة السر 6 أحرف على الأقل');
+                    return;
+                  }
+                  if (p1.text != p2.text) {
+                    setD(() => err = 'كلمتا السر غير متطابقتين');
+                    return;
+                  }
+                  setD(() => err = null);
+                  final r = await Api.resetPasswordWithCode(
+                      login, code, p1.text);
+                  if (r['success'] == true) {
+                    if (ctx.mounted) Navigator.pop(ctx, true);
+                  } else {
+                    setD(() =>
+                        err = '${r['error'] ?? 'تعذّر تغيير كلمة السر'}');
+                  }
+                },
+                child: const Text('حفظ')),
+          ],
+        ),
+      ),
+    );
+    if (done == true && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('✓ اتغيّرت كلمة السر — سجّل دخول بيها دلوقتي')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -123,6 +239,11 @@ class _LoginScreenState extends State<LoginScreen> {
                                 : const Text('تسجيل الدخول',
                                     style: TextStyle(fontSize: 16)),
                           ),
+                        ),
+                        const SizedBox(height: 2),
+                        TextButton(
+                          onPressed: _loading ? null : _forgotPassword,
+                          child: const Text('نسيت كلمة السر؟'),
                         ),
                       ],
                     ),
