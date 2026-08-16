@@ -549,12 +549,16 @@ class TripsViewState extends State<TripsView> {
   bool _isLate(Map<String, dynamic> o) {
     final st = o['status'];
     if (['completed', 'delivered'].contains(st)) return false;
-    final base = o['bill_date'] ?? o['created_at'];
+    // التأخير يُحسب من وقت استلام الطيار للطلب فقط (assigned_at/picked_at) — مش من عمر
+    // الطلب (bill_date/created_at)، عشان مايظهرش متأخر بسبب وقت التجهيز/التوزيع قبل ما
+    // يوصله. لو وقت التعيين/الاستلام مش موجود = مش متأخر.
     if (st == 'assigned') {
-      return _dm(o['assigned_at'] ?? base) > _lateAssigned;
+      final a = o['assigned_at'];
+      return a != null && _dm(a) > _lateAssigned;
     }
     if (st == 'picked') {
-      return _dm(o['picked_at'] ?? base) > _latePicked;
+      final p = o['picked_at'];
+      return p != null && _dm(p) > _latePicked;
     }
     return false;
   }
