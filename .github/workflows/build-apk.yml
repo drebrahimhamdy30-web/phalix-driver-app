@@ -121,9 +121,19 @@ jobs:
         # لو رسالة الكوميت فيها [skip-ota] → نبني النسخة وننشر الـAPK على GitHub بس من غير ما ندفع تحديث للطيارين
         # (بننشر التحديث يدويًا بعد التأكد)
         if: ${{ !contains(github.event.head_commit.message, '[skip-ota]') }}
+        env:
+          # ⚠️ الريبو ده **عام**. السر كان مكتوب صريح هنا وكان نفس سر تطبيق
+          #    الطيارين — يعني أي حد يقرا الملف كان يقدر يستبدل الـAPK اللي
+          #    بينزل على تليفونات الطيارين. دلوقتي سر مستقل من إعدادات الريبو:
+          #    Settings → Secrets and variables → Actions → APK_PUBLISH_SECRET
+          #    (القيمة موجودة في Supabase → Vault باسم apk_publish_secret)
+          APK_PUBLISH_SECRET: ${{ secrets.APK_PUBLISH_SECRET }}
         run: |
           FUNC="https://rxtjoqulmgkkcohmgzgi.supabase.co/functions/v1/apk-publish"
-          SECRET="87bcac4b4da9317f3b8716e6af9269533f8e2228cc0db43b"
+          SECRET="$APK_PUBLISH_SECRET"
+          if [ -z "$SECRET" ]; then
+            echo "❌ سر النشر مش متظبط — ضيف APK_PUBLISH_SECRET في أسرار الريبو"; exit 1
+          fi
           BUILD=$(grep '^version:' pubspec.yaml | sed 's/.*+//' | tr -d '[:space:]')
           REPO="${{ github.repository }}"
           APK_URL="https://github.com/$REPO/releases/download/v$BUILD/phalix-driver.apk"
