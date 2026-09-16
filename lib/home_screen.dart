@@ -59,8 +59,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
       _stopAlarms();
-      _tripsKey.currentState?.load();
-      _prevKey.currentState?.load();
+      _tripsKey.currentState?.load(background: true);
+      _prevKey.currentState?.load(background: true);
       _attKey.currentState?.refresh(reseedRank: true);
     }
   }

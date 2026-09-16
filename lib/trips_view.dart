@@ -101,7 +101,17 @@ class TripsViewState extends State<TripsView> {
     load();
     // تحديث العدّادات كل دقيقة (بدون إعادة تحميل من الشبكة)
     _tick = Timer.periodic(const Duration(seconds: 60), (_) {
-      if (mounted) setState(() {});
+      if (!mounted) return;
+      // الوضع الجاري + التطبيق في المقدمة → تحديث صامت من الشبكة (يوري الطلبات
+      // الجديدة من غير ما الطيار يحدّث يدوي، وبدون سبينر). غير كده = إعادة رسم
+      // العدّادات بس (بلا شبكة) عشان مانهدرش الباقة في الخلفية أو في السجل السابق.
+      final fg =
+          WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
+      if (_isActiveMode && fg) {
+        load(background: true);
+      } else {
+        setState(() {});
+      }
     });
   }
 
