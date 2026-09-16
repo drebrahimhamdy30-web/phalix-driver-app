@@ -35,10 +35,10 @@ class Config {
   static const String appSecret =
       '87bcac4b4da9317f3b8716e6af9269533f8e2228cc0db43b';
   // رقم إصدار داخلي للتشخيص
-  static const String appVersion = 'poll-v69';
+  static const String appVersion = 'poll-v70';
   // رقم البناء (يُقارن بآخر نسخة منشورة لعرض رسالة التحديث)
   // ملاحظة: الـworkflow يزامن هذا الرقم تلقائيًا من pubspec عند البناء
-  static const int appBuild = 69;
+  static const int appBuild = 70;
   // كل كام ثانية تسحب الخدمة الطلبات الجديدة — 20ث لتخفيف الضغط على اتصالات قاعدة البيانات
   // (الطلبات الجديدة بتوصل بالإشعار FCM فورًا، فالسحب مجرد تحديث دوري للحالة)
   static const int pollIntervalMs = 20000;

@@ -733,34 +733,39 @@ class TripsViewState extends State<TripsView> {
     final blocking =
         orders.where((o) => ['assigned', 'picked'].contains(o['status'])).length;
     final pending = trip['status'] == 'pending_complete';
+    final btns = <Widget>[];
+    if (assigned.isNotEmpty) {
+      btns.add(_bigBtn('▶️ استلمت الكل (${assigned.length})',
+          const Color(0xFF0891b2),
+          () => _pickupAll(assigned.map((o) => '${o['id']}').toList())));
+    }
+    if (pending) {
+      btns.add(_bigBtn('⏳ بانتظار موافقة الإدارة — إلغاء الطلب',
+          const Color(0xFFa16207),
+          () => _run(() async {
+                await Api.updateTrip(
+                    '${trip['id']}', {'status': 'active'}, widget.jwt);
+                await Api.logTrip('${trip['id']}', 'complete_cancelled',
+                    {'by': 'driver'}, widget.driverId, widget.driverName,
+                    widget.jwt);
+              })));
+    } else {
+      btns.add(_bigBtn(
+          blocking > 0
+              ? '⏳ ينتظر $blocking طلب'
+              : (_canComplete ? '🏁 إنهاء الرحلة' : '🏁 طلب إنهاء الرحلة'),
+          blocking > 0 ? const Color(0xFF9ca3af) : const Color(0xFF16a34a),
+          blocking > 0 ? null : () => _completeTrip(trip, orders)));
+    }
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
-      child: Column(
-        children: [
-          if (assigned.isNotEmpty)
-            _bigBtn('▶️ استلمت الكل (${assigned.length})',
-                const Color(0xFF0891b2),
-                () => _pickupAll(
-                    assigned.map((o) => '${o['id']}').toList())),
-          if (pending)
-            _bigBtn('⏳ بانتظار موافقة الإدارة — إلغاء الطلب',
-                const Color(0xFFa16207),
-                () => _run(() async {
-                      await Api.updateTrip(
-                          '${trip['id']}', {'status': 'active'}, widget.jwt);
-                      await Api.logTrip('${trip['id']}', 'complete_cancelled',
-                          {'by': 'driver'}, widget.driverId, widget.driverName,
-                          widget.jwt);
-                    }))
-          else
-            _bigBtn(
-                blocking > 0
-                    ? '⏳ ينتظر $blocking طلب'
-                    : (_canComplete ? '🏁 إنهاء الرحلة' : '🏁 طلب إنهاء الرحلة'),
-                blocking > 0 ? const Color(0xFF9ca3af) : const Color(0xFF16a34a),
-                blocking > 0 ? null : () => _completeTrip(trip, orders)),
-        ],
-      ),
+      child: btns.length >= 2
+          ? Row(children: [
+              Expanded(child: btns[0]),
+              const SizedBox(width: 8),
+              Expanded(child: btns[1]),
+            ])
+          : btns.first,
     );
   }
 
@@ -793,6 +798,7 @@ class TripsViewState extends State<TripsView> {
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 2,
+      clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: late
@@ -801,48 +807,50 @@ class TripsViewState extends State<TripsView> {
       ),
       child: Column(
         children: [
-          ListTile(
+          // ===== الملخّص (ظاهر دايمًا) — الضغط يفتح/يقفل باقي التفاصيل =====
+          InkWell(
             onTap: () => setState(
                 () => open ? _expanded.remove(id) : _expanded.add(id)),
-            title: Row(
-              children: [
-                // السطر الأول: اسم العميل كامل
-                Expanded(
-                    child: Text('$name',
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                            fontWeight: FontWeight.bold, fontSize: 15))),
-                if (late)
-                  const Padding(
-                    padding: EdgeInsets.only(left: 4),
-                    child: Text('⏰ متأخر',
-                        style: TextStyle(
-                            color: Color(0xFFdc2626),
-                            fontWeight: FontWeight.bold,
-                            fontSize: 11)),
-                  ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                      color: _statusColor(status).withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(8)),
-                  child: Text(_stLabel[status] ?? status,
-                      style: TextStyle(
-                          color: _statusColor(status),
-                          fontWeight: FontWeight.w700,
-                          fontSize: 12)),
-                ),
-                Icon(open ? Icons.expand_less : Icons.expand_more,
-                    color: Colors.grey),
-              ],
-            ),
-            subtitle: Padding(
-              padding: const EdgeInsets.only(top: 5),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // السطر الأول: الاسم + متأخر + الحالة + السهم
+                  Row(
+                    children: [
+                      Expanded(
+                          child: Text('$name',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                  fontWeight: FontWeight.bold, fontSize: 15))),
+                      if (late)
+                        const Padding(
+                          padding: EdgeInsets.only(left: 4),
+                          child: Text('⏰ متأخر',
+                              style: TextStyle(
+                                  color: Color(0xFFdc2626),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 11)),
+                        ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 3),
+                        decoration: BoxDecoration(
+                            color: _statusColor(status).withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(8)),
+                        child: Text(_stLabel[status] ?? status,
+                            style: TextStyle(
+                                color: _statusColor(status),
+                                fontWeight: FontWeight.w700,
+                                fontSize: 12)),
+                      ),
+                      Icon(open ? Icons.expand_less : Icons.expand_more,
+                          color: Colors.grey),
+                    ],
+                  ),
+                  const SizedBox(height: 5),
                   // السطر الثاني: العنوان
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -856,7 +864,8 @@ class TripsViewState extends State<TripsView> {
                                   fontSize: 12.5, color: Color(0xFF475569)))),
                     ],
                   ),
-                  const SizedBox(height: 5),
+                  const SizedBox(height: 7),
+                  // شارات: الكود + العدّادات + التقييم
                   Wrap(
                     spacing: 8,
                     runSpacing: 4,
@@ -876,39 +885,75 @@ class TripsViewState extends State<TripsView> {
               ),
             ),
           ),
-          if (open) _orderDetail(o),
+          // ===== صف الملخّص: المنطقة/كاش/عدد + القيمة (ظاهر دايمًا) =====
+          _summaryRow(o),
+          // ===== من «استلمت» ونازل: مخفي لحد الضغط =====
+          if (open) _orderExpanded(o),
         ],
       ),
     );
   }
 
-  Widget _orderDetail(Map<String, dynamic> o) {
-    final status = '${o['status']}';
-    final pm = o['payment_method'];
+  // صف الملخّص الظاهر دايمًا: المنطقة · كاش · عدد الأصناف (يمين) + قيمة الطلب (شمال)
+  Widget _summaryRow(Map<String, dynamic> o) {
     final region = o['cust_region'];
+    final pm = o['payment_method'];
     final items = o['count_of_items'];
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+      decoration: const BoxDecoration(
+        color: Color(0xFFf6f8fb),
+        border: Border(
+          top: BorderSide(color: Color(0xFFeceff3)),
+          bottom: BorderSide(color: Color(0xFFeceff3)),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                if (region != null && '$region'.isNotEmpty)
+                  _tag('$region', const Color(0xFF6366f1)),
+                _tag(pm != null ? (_payLabel[pm] ?? '$pm') : '💵 كاش',
+                    const Color(0xFF0891b2)),
+                if (items != null) _tag('$items صنف', Colors.grey),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text('${_money(o['total_bill_net'])}',
+              style: const TextStyle(
+                  fontSize: 19,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF0a3d62))),
+          const Padding(
+            padding: EdgeInsets.only(right: 3),
+            child: Text('ج.م',
+                style: TextStyle(fontSize: 11, color: Color(0xFF64748b))),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // الجزء المخفي (من «استلمت» ونازل) — يظهر بالضغط على الكارت
+  Widget _orderExpanded(Map<String, dynamic> o) {
+    final status = '${o['status']}';
     final collected = o['collected_amount'];
     final staffNotes = o['staff_notes'];
     final failReason = o['postpone_reason'];
     final urgent = '${o['notes'] ?? ''}'.contains('🚨');
     return Padding(
-      padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Divider(),
-          Wrap(spacing: 6, runSpacing: 6, children: [
-            if (region != null && '$region'.isNotEmpty) _tag('$region', const Color(0xFF6366f1)),
-            _tag(pm != null ? (_payLabel[pm] ?? '$pm') : '💵 كاش',
-                const Color(0xFF0891b2)),
-            if (items != null) _tag('$items صنف', Colors.grey),
-          ]),
-          const SizedBox(height: 8),
-          Text('${_money(o['total_bill_net'])} ج.م',
-              style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: AppTheme.primary)),
+          _orderActions(o),
           if (collected != null && (collected is num ? collected : 0) != 0)
             Builder(builder: (_) {
               final c = collected is num ? collected : 0;
@@ -917,7 +962,7 @@ class TripsViewState extends State<TripsView> {
               final differs = bill > 0 && c != bill;
               final approved = o['collected_approved'] == true;
               return Padding(
-                padding: const EdgeInsets.only(top: 4),
+                padding: const EdgeInsets.only(top: 8),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -939,9 +984,7 @@ class TripsViewState extends State<TripsView> {
                 ),
               );
             }),
-          _orderItemsBtn(o),
-          if (urgent)
-            _note('🚨 طلب عاجل', const Color(0xFFdc2626)),
+          if (urgent) _note('🚨 طلب عاجل', const Color(0xFFdc2626)),
           if (staffNotes != null && '$staffNotes'.isNotEmpty)
             _note('💼 $staffNotes', const Color(0xFF7c3aed)),
           if (o['driver_message'] != null && '${o['driver_message']}'.isNotEmpty)
@@ -949,13 +992,99 @@ class TripsViewState extends State<TripsView> {
                 const Color(0xFF1e40af)),
           if (status == 'failed' && failReason != null)
             _note('⚠️ تعذر: $failReason', const Color(0xFFdc2626)),
-          _phoneButtons(o),
-          const SizedBox(height: 10),
-          _orderActions(o),
+          _detailsSection(o),
         ],
       ),
     );
   }
+
+  // قسم «تفاصيل إضافية» بخلفية متميّزة: اتصال + واتساب + الأصناف في صف واحد
+  Widget _detailsSection(Map<String, dynamic> o) {
+    final chips = <Widget>[..._phoneChips(o), _itemsChip(o)];
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 10),
+      decoration: const BoxDecoration(
+        color: Color(0xFFf1efe8),
+        border: Border(top: BorderSide(color: Color(0xFFcfcdc4))),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Padding(
+            padding: EdgeInsets.only(bottom: 7),
+            child: Text('تفاصيل إضافية',
+                style: TextStyle(fontSize: 10.5, color: Color(0xFF888780))),
+          ),
+          Wrap(spacing: 8, runSpacing: 8, children: chips),
+        ],
+      ),
+    );
+  }
+
+  // أزرار الاتصال/واتساب لكل رقم (شكل مدمج للصف)
+  List<Widget> _phoneChips(Map<String, dynamic> o) {
+    final raw = '${o['customer_phone'] ?? ''}';
+    final nums = raw
+        .split(RegExp(r'[,،]'))
+        .map((s) => s.replaceAll(RegExp(r'[^0-9+]'), ''))
+        .where((s) => s.length >= 5)
+        .toList();
+    final out = <Widget>[];
+    for (final n in nums) {
+      out.add(InkWell(
+        onTap: () => launchUrl(Uri.parse('tel:$n'),
+            mode: LaunchMode.externalApplication),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(9),
+            border: Border.all(color: const Color(0xFFd3d1c7)),
+          ),
+          child: Text('📞 $n',
+              textDirection: TextDirection.ltr,
+              style: const TextStyle(
+                  color: Color(0xFF185fa5),
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13)),
+        ),
+      ));
+      out.add(InkWell(
+        onTap: () => launchUrl(Uri.parse('https://wa.me/${_waNumber(n)}'),
+            mode: LaunchMode.externalApplication),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          decoration: BoxDecoration(
+            color: const Color(0xFFe1f5ee),
+            borderRadius: BorderRadius.circular(9),
+            border: Border.all(color: const Color(0xFF9fe1cb)),
+          ),
+          child: const Text('🟢 واتساب',
+              style: TextStyle(
+                  color: Color(0xFF0f6e56),
+                  fontWeight: FontWeight.w700,
+                  fontSize: 13)),
+        ),
+      ));
+    }
+    return out;
+  }
+
+  Widget _itemsChip(Map<String, dynamic> o) => InkWell(
+        onTap: () => _showItems(o),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(9),
+            border: Border.all(color: const Color(0xFFd3d1c7)),
+          ),
+          child: const Text('🧾 الأصناف',
+              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13)),
+        ),
+      );
 
   // قائمة أصناف الطلب (من عمود items — مصفوفة {name, qty})
   // زر عرض أصناف الطلب — يجلبها من ويبهوك n8n ويعرضها في نافذة منبثقة
