@@ -112,7 +112,10 @@ Future<LocResult> checkPickupLocation(Map<String, dynamic>? settings) async {
   }
 
   final dist = _distanceMeters(loc['lat']!, loc['lng']!, plat, plng);
-  if (dist > radius) {
+  final acc = (loc['acc'] ?? 0).toDouble();
+  // نطرح عدم يقين الـGPS: نعتبره «بره» بس لو مؤكّد بره حتى مع هامش دقة الجهاز.
+  // كده الطيار جوّه الصيدلية وGPS ضعيف (دقة كبيرة، شائع جوّه المباني) مايتمنعش بالغلط.
+  if (dist - acc > radius) {
     return LocResult(
         ok: false,
         distance: dist,
@@ -120,6 +123,7 @@ Future<LocResult> checkPickupLocation(Map<String, dynamic>? settings) async {
         lng: loc['lng'],
         acc: loc['acc']);
   }
+  // داخل النطاق (أو الدقة ضعيفة فمش مؤكّد إنه بره) → نسمح
   return LocResult(
       ok: true, distance: dist, lat: loc['lat'], lng: loc['lng'], acc: loc['acc']);
 }
