@@ -75,6 +75,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      // كمان نعيد قراءة الإعداد أول ما الطيار يفتح التطبيق —
+      // أسرع من انتظار دورة الخدمة، ولو اتغيّر الباك إند التوكن
+      // القديم هيترفض و_checkSession هتخرّجه لتسجيل الدخول.
+      Config.load();
       _checkSession();
       _stopAlarms();
       _tripsKey.currentState?.load(background: true);

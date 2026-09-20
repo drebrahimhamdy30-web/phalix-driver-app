@@ -240,6 +240,16 @@ class AlarmTaskHandler extends TaskHandler {
     _busy = true;
     try {
       _tick++;
+
+      // إعادة قراءة عنوان الباك إند كل نص ساعة (90 دورة × 20ث).
+      // من غير ده التحويل مايوصلش للأجهزة إلا بإيقاف إجباري: الخدمة
+      // بتخلّي العملية حية لأيام، والإعداد بيتقرا عند تشغيل العملية بس.
+      // (اتكشفت في بروفة التحويل — التطبيق فضل على الباك إند القديم
+      //  رغم إن الملف اتغيّر.)
+      if (_tick % 90 == 0) {
+        await Config.load();
+      }
+
       final shiftActive =
           (await FlutterForegroundTask.getData<bool>(key: 'shift_active')) ??
               true;
