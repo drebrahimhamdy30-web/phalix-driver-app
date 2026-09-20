@@ -217,6 +217,9 @@ class AlarmTaskHandler extends TaskHandler {
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
     // تسجيل الـ plugins داخل عملية الخدمة (لازم عشان الإشعارات تشتغل هنا)
     ui.DartPluginRegistrant.ensureInitialized();
+    // الخدمة isolate منفصل: متغيّرات Config الساكنة عندها نسخة خاصة،
+    // فلازم تقرا الإعداد بنفسها وإلا هتفضل تسحب من العنوان الافتراضي
+    await Config.load();
     await initNotifications();
     _driverId =
         (await FlutterForegroundTask.getData<String>(key: 'driver_id')) ?? '';
@@ -362,6 +365,10 @@ Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   FlutterForegroundTask.initCommunicationPort();
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  // عنوان الباك إند بيتقرا من app-config.json قبل أي نداء — لازم يسبق
+  // تهيئة سوبابيز، وإلا هتتهيّأ على العنوان القديم ويفضل مستعمَل طول الجلسة
+  await Config.load();
 
   // تهيئة Supabase (Realtime) — عشان التطبيق يرد على طلب "موقع الطيار الحالي" من الإدارة
   try {
