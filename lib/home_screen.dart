@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -35,15 +36,31 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       GlobalKey<AttendanceBarState>();
   final LocationResponder _locResponder = LocationResponder();
 
+  Timer? _sessionWatch;
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _init();
+    // الباك إند لو رفض التوكن، التطبيق لازم يقول — مش يفضل بشاشات فاضية
+    _sessionWatch = Timer.periodic(
+        const Duration(seconds: 15), (_) => _checkSession());
+  }
+
+  void _checkSession() {
+    if (!Api.sessionExpired || !mounted) return;
+    Api.sessionExpired = false;   // عشان ماتتكررش وإحنا بنخرّج
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+      content: Text('انتهت الجلسة — سجّل دخول تاني'),
+      duration: Duration(seconds: 4),
+    ));
+    _logout();
   }
 
   @override
   void dispose() {
+    _sessionWatch?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _locResponder.stop();
     super.dispose();
@@ -58,6 +75,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
+      _checkSession();
       _stopAlarms();
       _tripsKey.currentState?.load(background: true);
       _prevKey.currentState?.load(background: true);

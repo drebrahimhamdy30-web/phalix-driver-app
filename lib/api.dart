@@ -2,7 +2,32 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'config.dart';
 
+// ═══ رصد انتهاء الجلسة ═══
+// التوكن بيتولّد في n8n وصلاحيته 7 أيام، وبيتوقّع بختم الباك إند.
+// لما الباك إند يتغيّر (أو الختم يتدوّر)، التوكن القديم بيترفض بـ401.
+// من غير الرصد ده التطبيق بيفضل شغّال بشاشات فاضية والطيار مش فاهم —
+// وأسوأ حاجة إن الإشعارات بتفضل شغّالة (بتستعمل appSecret مش التوكن)،
+// فالطيار يسمع التنبيه ويفتح ويلاقي مفيش طلبات.
+class _SbClient extends http.BaseClient {
+  final http.Client _inner = http.Client();
+
+  @override
+  Future<http.StreamedResponse> send(http.BaseRequest request) async {
+    final res = await _inner.send(request);
+    // 401 من الباك إند بس — مش من n8n (شاشة الدخول بتتعامل معاه لوحدها)
+    if (res.statusCode == 401 &&
+        request.url.toString().startsWith(Config.supabaseUrl)) {
+      Api.sessionExpired = true;
+    }
+    return res;
+  }
+}
+
+final _http = _SbClient();
+
 class Api {
+  /// بيترفع لما الباك إند يرفض التوكن. الشاشة بتشوفه وتودّي لتسجيل الدخول.
+  static bool sessionExpired = false;
   // ترويسات Supabase REST (anon key + توكن المستخدم)
   static Map<String, String> _headers(String? jwt) => {
         'apikey': Config.supabaseAnonKey,
@@ -13,7 +38,7 @@ class Api {
   // طلب كود استعادة كلمة السر — يبعت للـ n8n اللي يبعت الكود على إيميل الطيار
   static Future<void> requestPasswordReset(String login) async {
     try {
-      await http
+      await _http
           .post(Uri.parse(Config.forgotPasswordUrl),
               headers: {'Content-Type': 'application/json'},
               body: jsonEncode({'login': login}))
@@ -25,7 +50,7 @@ class Api {
   static Future<Map<String, dynamic>> resetPasswordWithCode(
       String login, String code, String newPassword) async {
     try {
-      final res = await http
+      final res = await _http
           .post(Uri.parse('$_rest/rpc/reset_password_with_code'),
               headers: _headers(null),
               body: jsonEncode({
@@ -43,7 +68,7 @@ class Api {
   // تسجيل الدخول عبر n8n
   static Future<Map<String, dynamic>?> login(String user, String pass) async {
     try {
-      final res = await http.post(
+      final res = await _http.post(
         Uri.parse(Config.loginUrl),
         headers: {'Content-Type': 'text/plain'},
         body: jsonEncode({'user': user, 'pass': pass}),
@@ -63,7 +88,7 @@ class Api {
   static Future<Map<String, dynamic>?> getDriver(int userId, String jwt) async {
     final url =
         '${Config.supabaseUrl}/rest/v1/drivers?branch_user_id=eq.$userId&select=id,full_name,is_online,branch_id,avatar&limit=1';
-    final res = await http.get(Uri.parse(url), headers: _headers(jwt));
+    final res = await _http.get(Uri.parse(url), headers: _headers(jwt));
     if (res.statusCode == 200) {
       final list = jsonDecode(res.body) as List;
       if (list.isNotEmpty) return Map<String, dynamic>.from(list.first);
@@ -76,7 +101,7 @@ class Api {
       String driverId, String token, String jwt) async {
     final url =
         '${Config.supabaseUrl}/rest/v1/driver_fcm_tokens?on_conflict=token';
-    final res = await http.post(
+    final res = await _http.post(
       Uri.parse(url),
       headers: {
         ..._headers(jwt),
@@ -101,7 +126,7 @@ class Api {
         '&select=id,bill_no,customer_name,customer_phone,customer_address,cust_region,total_bill_net,status,driver_message,driver_message_seen_at'
         '&order=assigned_at.desc';
     try {
-      final res = await http
+      final res = await _http
           .get(Uri.parse(url), headers: _headers(jwt))
           .timeout(const Duration(seconds: 8));
       if (res.statusCode == 200) {
@@ -125,7 +150,7 @@ class Api {
   static Future<List<Map<String, dynamic>>> _getList(
       String url, String jwt) async {
     try {
-      final res = await http
+      final res = await _http
           .get(Uri.parse(url), headers: _headers(jwt))
           .timeout(const Duration(seconds: 10));
       if (res.statusCode == 200) {
@@ -289,7 +314,7 @@ class Api {
   static Future<List<Map<String, dynamic>>> getBillItems(
       String billNo, String branchId) async {
     if (billNo.trim().isEmpty) return [];
-    final res = await http.post(
+    final res = await _http.post(
       Uri.parse('https://agent.ebrahimhamdy.com/webhook/sales_item'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({'branch_id': branchId, 'bill_no': billNo}),
@@ -428,7 +453,7 @@ class Api {
   static Future<bool> _post(
       String url, Map<String, dynamic> body, String jwt) async {
     try {
-      final res = await http
+      final res = await _http
           .post(Uri.parse(url),
               headers: {..._headers(jwt), 'Prefer': 'return=minimal'},
               body: jsonEncode(body))
@@ -443,7 +468,7 @@ class Api {
   static Future<Map<String, dynamic>> changePassword(
       String driverId, String oldPw, String newPw, String jwt) async {
     try {
-      final res = await http
+      final res = await _http
           .post(
             Uri.parse('${Config.supabaseUrl}/functions/v1/change-password'),
             headers: _headers(jwt),
@@ -475,7 +500,7 @@ class Api {
   // تسجيل تشخيصي (يذهب إلى driver_debug عبر driver-mark)
   static Future<void> debug(String event, Map<String, dynamic> data) async {
     try {
-      await http
+      await _http
           .post(Uri.parse(Config.markUrl),
               headers: {'Content-Type': 'application/json'},
               body: jsonEncode({'event': event, ...data}))
@@ -499,7 +524,7 @@ class Api {
       Map<String, dynamic> details, String driverId, String driverName,
       String jwt) async {
     try {
-      await http
+      await _http
           .post(
             Uri.parse('$_rest/order_logs'),
             headers: {..._headers(jwt), 'Prefer': 'return=minimal'},
@@ -521,7 +546,7 @@ class Api {
       String jwt) async {
     if (tripId.isEmpty || tripId == 'direct') return;
     try {
-      await http
+      await _http
           .post(
             Uri.parse('$_rest/trip_logs'),
             headers: {..._headers(jwt), 'Prefer': 'return=minimal'},
@@ -542,7 +567,7 @@ class Api {
       String tripId, String jwt) async {
     if (tripId.isEmpty || tripId == 'direct') return [];
     try {
-      final res = await http
+      final res = await _http
           .post(
             Uri.parse('$_rest/rpc/get_trip_review_flags'),
             headers: _headers(jwt),
@@ -564,7 +589,7 @@ class Api {
       String driverId, String tripId) async {
     if (driverId.isEmpty || tripId.isEmpty || tripId == 'direct') return;
     try {
-      await http
+      await _http
           .post(
             Uri.parse(Config.checkPrevTripUrl),
             headers: {'Content-Type': 'application/json'},
@@ -579,7 +604,7 @@ class Api {
 
   static Future<bool> _patch(String url, Map<String, dynamic> body, String jwt) async {
     try {
-      final res = await http
+      final res = await _http
           .patch(Uri.parse(url),
               headers: {..._headers(jwt), 'Prefer': 'return=minimal'},
               body: jsonEncode(body))
@@ -649,7 +674,7 @@ class Api {
   // جلب صورة/رمز الطيار الحالية
   static Future<String?> getAvatar(String driverId, String jwt) async {
     try {
-      final res = await http
+      final res = await _http
           .get(Uri.parse('$_rest/drivers?id=eq.$driverId&select=avatar&limit=1'),
               headers: _headers(jwt))
           .timeout(const Duration(seconds: 8));
@@ -693,7 +718,7 @@ class Api {
   static Future<void> deleteTripOrder(
       String tripId, String orderId, String jwt) async {
     try {
-      await http
+      await _http
           .delete(
               Uri.parse(
                   '$_rest/trip_orders?trip_id=eq.$tripId&order_id=eq.$orderId'),
