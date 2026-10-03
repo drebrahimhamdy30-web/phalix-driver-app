@@ -539,7 +539,8 @@ class TripsViewState extends State<TripsView> {
     if (o['collected_approved'] == true && o['collected_amount'] is num) {
       return o['collected_amount'] as num;
     }
-    return o['total_bill_net'] is num ? o['total_bill_net'] as num : 0;
+    return (o['total_bill_net'] is num ? o['total_bill_net'] as num : 0) +
+        (o['extra_collection'] is num ? o['extra_collection'] as num : 0);
   }
 
   int _dm(dynamic from, [dynamic to]) {
@@ -921,12 +922,14 @@ class TripsViewState extends State<TripsView> {
                   _tag('$region', const Color(0xFF6366f1)),
                 _tag(pm != null ? (_payLabel[pm] ?? '$pm') : '💵 كاش',
                     const Color(0xFF0891b2)),
+                if (o['extra_collection'] is num && (o['extra_collection'] as num) > 0)
+                  _tag('➕ تحصيل ${_money(o['extra_collection'])} ج', const Color(0xFFb45309)),
                 if (items != null) _tag('$items صنف', Colors.grey),
               ],
             ),
           ),
           const SizedBox(width: 8),
-          Text('${_money(o['total_bill_net'])}',
+          Text('${_money((o['total_bill_net'] is num ? o['total_bill_net'] as num : 0) + (o['extra_collection'] is num ? o['extra_collection'] as num : 0))}',
               style: const TextStyle(
                   fontSize: 19,
                   fontWeight: FontWeight.bold,
@@ -992,6 +995,11 @@ class TripsViewState extends State<TripsView> {
                 const Color(0xFF1e40af)),
           if (status == 'failed' && failReason != null)
             _note('⚠️ تعذر: $failReason', const Color(0xFFdc2626)),
+          if (o['extra_collection'] is num && (o['extra_collection'] as num) > 0)
+            _note(
+                '➕ تحصيل إضافي: ${_money(o['extra_collection'])} ج — الإجمالي المطلوب ${_money((o['total_bill_net'] is num ? o['total_bill_net'] as num : 0) + (o['extra_collection'] as num))} ج'
+                '${(o['extra_collection_note'] != null && '${o['extra_collection_note']}'.isNotEmpty) ? '\nالسبب: ${o['extra_collection_note']}' : ''}',
+                const Color(0xFFb45309)),
           _detailsSection(o),
         ],
       ),
@@ -1000,7 +1008,12 @@ class TripsViewState extends State<TripsView> {
 
   // قسم «تفاصيل إضافية» بخلفية متميّزة: اتصال + واتساب + الأصناف في صف واحد
   Widget _detailsSection(Map<String, dynamic> o) {
-    final chips = <Widget>[..._phoneChips(o), _itemsChip(o)];
+    final chips = <Widget>[
+      if (o['driver_call_number'] != null && '${o['driver_call_number']}'.isNotEmpty)
+        _callNumberChip('${o['driver_call_number']}'),
+      ..._phoneChips(o),
+      _itemsChip(o)
+    ];
     return Container(
       width: double.infinity,
       margin: const EdgeInsets.only(top: 10),
@@ -1019,6 +1032,29 @@ class TripsViewState extends State<TripsView> {
           ),
           Wrap(spacing: 8, runSpacing: 8, children: chips),
         ],
+      ),
+    );
+  }
+
+  // زر اتصال لرقم بديل بعته الإدارة للطيار
+  Widget _callNumberChip(String raw) {
+    final n = raw.replaceAll(RegExp(r'[^0-9+]'), '');
+    return InkWell(
+      onTap: () => launchUrl(Uri.parse('tel:$n'),
+          mode: LaunchMode.externalApplication),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+        decoration: BoxDecoration(
+          color: const Color(0xFFdbeafe),
+          borderRadius: BorderRadius.circular(9),
+          border: Border.all(color: const Color(0xFFbfdbfe)),
+        ),
+        child: Text('📞 رقم من الإدارة: $n',
+            textDirection: TextDirection.ltr,
+            style: const TextStyle(
+                color: Color(0xFF1e40af),
+                fontWeight: FontWeight.w800,
+                fontSize: 13)),
       ),
     );
   }
@@ -1462,10 +1498,15 @@ class TripsViewState extends State<TripsView> {
       if (!mounted) return;
     }
     String pay = '${o['payment_method'] ?? 'cash'}';
-    final num billNum = (o['total_bill_net'] is num)
+    final num billOnly = (o['total_bill_net'] is num)
         ? o['total_bill_net'] as num
         : num.tryParse('${o['total_bill_net'] ?? 0}') ?? 0;
-    // الرقم الافتراضي = قيمة الفاتورة
+    final num extraNum = (o['extra_collection'] is num)
+        ? o['extra_collection'] as num
+        : num.tryParse('${o['extra_collection'] ?? 0}') ?? 0;
+    // المطلوب = الفاتورة + التحصيل الإضافي
+    final num billNum = billOnly + extraNum;
+    // الرقم الافتراضي = الإجمالي المطلوب
     final amtCtrl = TextEditingController(text: billNum == 0 ? '' : '$billNum');
     final noteCtrl = TextEditingController();
     final ok = await showDialog<bool>(
@@ -1510,7 +1551,10 @@ class TripsViewState extends State<TripsView> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text('قيمة الفاتورة: ${_money(billNum)} ج.م',
+                      Text(
+                          extraNum > 0
+                              ? 'المطلوب: ${_money(billNum)} ج.م (فاتورة ${_money(billOnly)} + تحصيل إضافي ${_money(extraNum)})'
+                              : 'قيمة الفاتورة: ${_money(billNum)} ج.م',
                           style: const TextStyle(
                               fontSize: 12, color: Colors.grey)),
                       if (changed)

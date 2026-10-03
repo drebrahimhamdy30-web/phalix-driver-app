@@ -171,7 +171,8 @@ class Api {
       'driver_notes,staff_notes,postpone_reason,cancelled_reason,attempt_count,collected_amount,'
       'driver_id,assigned_at,completed_at,postpone_time,last_activated_at,collected_approved,'
       'delivery_lat,delivery_lng,expected_minutes,actual_minutes,perf_rating,distance_meters,'
-      'dispatch_type,driver_message,driver_message_seen_at';
+      'dispatch_type,driver_message,driver_message_seen_at,'
+      'extra_collection,extra_collection_note,driver_call_number';
 
   // تحميل لوحة الطيار: الرحلة الجارية + آخر 3 رحلات + طلباتها (مُحسّن: نداءات أقل)
   static Future<Map<String, dynamic>> loadBoard(
