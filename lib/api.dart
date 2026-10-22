@@ -117,6 +117,29 @@ class Api {
     return res.statusCode >= 200 && res.statusCode < 300;
   }
 
+  // تحديث موقع السائق الحي أثناء الرحلة — upsert على driver_id بتوكن السائق
+  // (authenticated). بديل سليم للرادّ القديم اللي كان بيكتب كـanon فيفشل.
+  static Future<bool> updateDriverLocation(
+      String driverId, double lat, double lng, double? acc, String jwt) async {
+    final url =
+        '${Config.supabaseUrl}/rest/v1/driver_locations?on_conflict=driver_id';
+    final res = await _http.post(
+      Uri.parse(url),
+      headers: {
+        ..._headers(jwt),
+        'Prefer': 'resolution=merge-duplicates',
+      },
+      body: jsonEncode({
+        'driver_id': driverId,
+        'lat': lat,
+        'lng': lng,
+        'acc': acc,
+        'reported_at': DateTime.now().toUtc().toIso8601String(),
+      }),
+    );
+    return res.statusCode >= 200 && res.statusCode < 300;
+  }
+
   // جلب طلبات السائق النشطة
   static Future<List<Map<String, dynamic>>> getOrders(
       String driverId, String jwt) async {

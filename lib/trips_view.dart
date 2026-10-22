@@ -142,6 +142,8 @@ class TripsViewState extends State<TripsView> {
     final activeTrip = trips
         .where((t) => ['active', 'pending_complete'].contains(t['status']))
         .toList();
+    // بثّ الموقع الحي أثناء الرحلة (مرة كل ~دقيقة مع كل تحميل للوحة الجارية)
+    if (_isActiveMode && activeTrip.isNotEmpty) unawaited(_pushDriverLocation());
     if (!mounted) return;
     setState(() {
       _trips = trips;
@@ -175,6 +177,26 @@ class TripsViewState extends State<TripsView> {
     } else if (mounted) {
       setState(() => _reviewFlags = []);
     }
+  }
+
+  // بثّ موقع السائق لـdriver_locations أثناء الرحلة (بتوكن السائق authenticated).
+  // بنكتفي بمرة كل ~دقيقة حتى لو load اتنادت أكتر (تحديث يدوي مثلًا) — توفيرًا
+  // للبطارية والباقة. بيقف تلقائيًا لما الرحلة تخلص (مفيش activeTrip = مفيش نداء).
+  DateTime? _lastLocPush;
+  Future<void> _pushDriverLocation() async {
+    final now = DateTime.now();
+    if (_lastLocPush != null && now.difference(_lastLocPush!).inSeconds < 50) {
+      return;
+    }
+    _lastLocPush = now;
+    try {
+      final loc = await getCurrentLatLng();
+      final lat = loc?['lat'], lng = loc?['lng'];
+      if (lat != null && lng != null) {
+        await Api.updateDriverLocation(
+            widget.driverId, lat, lng, loc?['acc'], widget.jwt);
+      }
+    } catch (_) {}
   }
 
   // الرحلات الظاهرة حسب الوضع: الجارية فقط أو المكتملة (آخر 3)
