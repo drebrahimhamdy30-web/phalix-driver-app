@@ -6,6 +6,7 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:ota_update/ota_update.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:device_info_plus/device_info_plus.dart';
 import 'api.dart';
 import 'config.dart';
 import 'login_screen.dart';
@@ -261,10 +262,26 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         if (manual) _snack('أنت على أحدث نسخة (v${Config.appBuild}) ✅');
         return;
       }
-      _showUpdateDialog(apkUrl, v['force_update'] == true, '${v['notes'] ?? ''}');
+      // الموبايلات القديمة (32-بت) تاخد نسخة arm32 المخصوصة بدل arm64 اللي مش هتتثبّت عليها
+      final url = await _resolveAbiApk(apkUrl);
+      if (!mounted) return;
+      _showUpdateDialog(url, v['force_update'] == true, '${v['notes'] ?? ''}');
     } catch (_) {
       if (manual) _snack('تعذّر التحقق من التحديثات');
     }
+  }
+
+  // يختار نسخة الـAPK الصح حسب معمارية الجهاز: الموبايل 32-بت (مفيش arm64-v8a في
+  // supportedAbis) ياخد phalix-driver-arm32.apk، وغيره ياخد arm64 زي ما هي.
+  Future<String> _resolveAbiApk(String apkUrl) async {
+    try {
+      final info = await DeviceInfoPlugin().androidInfo;
+      final has64 = info.supportedAbis.contains('arm64-v8a');
+      if (!has64) {
+        return apkUrl.replaceAll('phalix-driver.apk', 'phalix-driver-arm32.apk');
+      }
+    } catch (_) {}
+    return apkUrl;
   }
 
   void _showUpdateDialog(String apkUrl, bool force, String notes) {
