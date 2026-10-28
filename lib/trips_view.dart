@@ -79,6 +79,10 @@ class TripsViewState extends State<TripsView> {
   bool _busy = false;
   List<Map<String, dynamic>> _trips = [];
   Map<String, List<Map<String, dynamic>>> _tripOrders = {};
+  // متعلقات العميل المعلّقة لكل طلب (order_id ← قايمة)
+  Map<String, List<Map<String, dynamic>>> _belongings = {};
+  List<Map<String, dynamic>> _belongOf(Map<String, dynamic> o) =>
+      _belongings['${o['id']}'] ?? const [];
   bool _canComplete = true;
   String? _selected;
   final Set<String> _expanded = {};
@@ -156,6 +160,18 @@ class TripsViewState extends State<TripsView> {
       }
       _loading = false;
     });
+    // متعلقات العميل لطلبات الرحلات المحمّلة — نداء واحد في الخلفية
+    // عشان اللوحة ما تستناش عليه (فشله مايمنعش عرض الطلبات).
+    final ordIds = _tripOrders.values
+        .expand((l) => l)
+        .map((o) => '${o['id']}')
+        .toSet()
+        .toList();
+    unawaited(Api.getBelongings(ordIds, widget.jwt).then((b) {
+      if (!mounted) return;
+      setState(() => _belongings = b);
+    }));
+
     // إحصائيات الشهر (رحلات/طلبات) لشاشة الرحلات السابقة — بالخلفية
     if (!_isActiveMode) {
       Api.getMonthStats(widget.driverId, widget.jwt).then((ms) {
@@ -1022,6 +1038,15 @@ class TripsViewState extends State<TripsView> {
                 '➕ تحصيل إضافي: ${_money(o['extra_collection'])} ج — الإجمالي المطلوب ${_money((o['total_bill_net'] is num ? o['total_bill_net'] as num : 0) + (o['extra_collection'] as num))} ج'
                 '${(o['extra_collection_note'] != null && '${o['extra_collection_note']}'.isNotEmpty) ? '\nالسبب: ${o['extra_collection_note']}' : ''}',
                 const Color(0xFFb45309)),
+          ..._belongOf(o).map((b) => b['same_branch'] == true
+              ? _note(
+                  '📦 متعلّق للعميل — ${b['kind'] ?? ''} · ضيفه مع الطلب'
+                  '\n${b['details'] ?? ''}'
+                  '${(b['attempts'] is num && (b['attempts'] as num) > 0) ? '\nرجع ${b['attempts']} مرة' : ''}',
+                  const Color(0xFF5b21b6))
+              : _note(
+                  '📦 للعميل متعلّق في ${b['branch_name'] ?? 'فرع آخر'} — مش من فرعك، ماتسلّمهوش',
+                  const Color(0xFF475569))),
           _detailsSection(o),
         ],
       ),
@@ -1531,6 +1556,10 @@ class TripsViewState extends State<TripsView> {
     // الرقم الافتراضي = الإجمالي المطلوب
     final amtCtrl = TextEditingController(text: billNum == 0 ? '' : '$billNum');
     final noteCtrl = TextEditingController();
+    // متعلقات العميل اللي في فرعنا — لازم الطيار يجاوب قبل التأكيد
+    final myBelongs =
+        _belongOf(o).where((b) => b['same_branch'] == true).toList();
+    bool? belongGiven;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
@@ -1538,6 +1567,77 @@ class TripsViewState extends State<TripsView> {
           title: const Text('تأكيد التسليم'),
           content: SingleChildScrollView(
             child: Column(mainAxisSize: MainAxisSize.min, children: [
+              if (myBelongs.isNotEmpty)
+                Container(
+                  width: double.infinity,
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                      color: const Color(0xFFf5f3ff),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                          color: const Color(0xFFa78bfa), width: 2)),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                            '📦 العميل له ${myBelongs.length > 1 ? '${myBelongs.length} متعلقات' : 'متعلّق'} عندنا',
+                            textAlign: TextAlign.right,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 13,
+                                color: Color(0xFF5b21b6))),
+                        const SizedBox(height: 4),
+                        ...myBelongs.map((b) => Padding(
+                              padding: const EdgeInsets.only(bottom: 2),
+                              child: Text(
+                                  '• ${b['kind'] ?? ''} — ${b['details'] ?? ''}',
+                                  textAlign: TextAlign.right,
+                                  style: const TextStyle(
+                                      fontSize: 12,
+                                      color: Color(0xFF6d28d9),
+                                      fontWeight: FontWeight.w600)),
+                            )),
+                        const SizedBox(height: 6),
+                        const Text('هل سلّمته للعميل؟',
+                            textAlign: TextAlign.right,
+                            style: TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 13,
+                                color: Color(0xFF5b21b6))),
+                        const SizedBox(height: 6),
+                        Row(children: [
+                          Expanded(
+                              child: ChoiceChip(
+                                  label: const Text('✓ نعم سلّمته'),
+                                  selected: belongGiven == true,
+                                  selectedColor: const Color(0xFFdcfce7),
+                                  onSelected: (_) =>
+                                      setD(() => belongGiven = true))),
+                          const SizedBox(width: 6),
+                          Expanded(
+                              child: ChoiceChip(
+                                  label: const Text('✕ لأ'),
+                                  selected: belongGiven == false,
+                                  selectedColor: const Color(0xFFfee2e2),
+                                  onSelected: (_) =>
+                                      setD(() => belongGiven = false))),
+                        ]),
+                        if (belongGiven != null)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: Text(
+                                belongGiven == true
+                                    ? 'هيتقفل باسمك وبوقت التسليم — ومش هيظهر تاني.'
+                                    : 'هيفضل مفتوح وهيظهر مع طلب العميل الجاي.',
+                                textAlign: TextAlign.right,
+                                style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: Color(0xFF6d28d9))),
+                          ),
+                      ]),
+                ),
               const Align(
                   alignment: Alignment.centerRight,
                   child: Text('طريقة الدفع',
@@ -1611,11 +1711,15 @@ class TripsViewState extends State<TripsView> {
                 onPressed: () => Navigator.pop(ctx, false),
                 child: const Text('إلغاء')),
             ElevatedButton(
-                onPressed: () => Navigator.pop(ctx, true),
+                onPressed: (myBelongs.isNotEmpty && belongGiven == null)
+                    ? null
+                    : () => Navigator.pop(ctx, true),
                 style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF16a34a),
                     foregroundColor: Colors.white),
-                child: const Text('تأكيد')),
+                child: Text(myBelongs.isNotEmpty && belongGiven == null
+                    ? 'جاوب على سؤال المتعلّق'
+                    : 'تأكيد')),
           ],
         ),
       ),
@@ -1669,7 +1773,20 @@ class TripsViewState extends State<TripsView> {
             widget.driverId,
             widget.driverName,
             widget.jwt));
+        // المتعلّق بعد ما الطلب يتسجّل تسليم — فشله مايلغيش التوصيل
+        for (final b in myBelongs) {
+          final bid = (b['id'] is int)
+              ? b['id'] as int
+              : int.tryParse('${b['id']}') ?? 0;
+          if (bid == 0) continue;
+          if (belongGiven == true) {
+            await Api.belongingDelivered(bid, id, widget.jwt);
+          } else if (belongGiven == false) {
+            await Api.belongingFailed(bid, 'ماتسلّمش مع الطلب', widget.jwt);
+          }
+        }
       });
+      if (myBelongs.isNotEmpty) unawaited(load(background: true));
     }
   }
 

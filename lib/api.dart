@@ -641,6 +641,38 @@ class Api {
 
   static String _now() => DateTime.now().toUtc().toIso8601String();
 
+  /* ===== متعلقات العميل =====
+     حاجة للعميل متبقية في الصيدلية (مرتجع مرفوض مثلًا) لازم ترجع
+     له مع أول طلب. المطابقة بالكود/التليفون محسوبة على السيرفر في
+     get_board_belongings — نداء واحد لكل طلبات الرحلة.
+     «سلّمته» بتقفل المتعلّق على طول وتسجّل اسم الطيار ووقت
+     التسليم؛ «ماتسلّمش» بتسيبه مفتوح وبتزوّد عدّاد المحاولات. */
+  static Future<Map<String, List<Map<String, dynamic>>>> getBelongings(
+      List<String> orderIds, String jwt) async {
+    if (orderIds.isEmpty) return {};
+    try {
+      final res = await _http
+          .post(Uri.parse('$_rest/rpc/get_board_belongings'),
+              headers: _headers(jwt),
+              body: jsonEncode({'p_branch': null, 'p_order_ids': orderIds}))
+          .timeout(const Duration(seconds: 10));
+      if (res.statusCode != 200) return {};
+      final m = jsonDecode(res.body);
+      if (m is! Map) return {};
+      return m.map((k, v) => MapEntry('$k',
+          (v as List).map((e) => Map<String, dynamic>.from(e)).toList()));
+    } catch (_) {
+      return {};
+    }
+  }
+
+  static Future<bool> belongingDelivered(int id, String orderId, String jwt) =>
+      _post('$_rest/rpc/belonging_mark_delivered',
+          {'p_id': id, 'p_order_id': orderId}, jwt);
+
+  static Future<bool> belongingFailed(int id, String note, String jwt) =>
+      _post('$_rest/rpc/belonging_mark_failed', {'p_id': id, 'p_note': note}, jwt);
+
   static Future<bool> pickupOrder(String id, String jwt) => _patch(
       '$_rest/orders?id=eq.$id',
       {'status': 'picked', 'picked_at': _now(), 'updated_at': _now()},
